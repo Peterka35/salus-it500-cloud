@@ -1,0 +1,7 @@
+{
+  "name": "Salus iT500",
+  "content_in_root": false,
+  "filename": "salusfy",
+  "render_readme": true,
+  "homeassistant": "2023.1.0"
+}
