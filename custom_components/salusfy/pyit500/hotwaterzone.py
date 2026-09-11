@@ -1,6 +1,7 @@
 """Module to provide the HotWaterZone class"""
-from .zone import Zone, ZoneAttribute, ScheduleType, OnOffStatus
+
 from .enumfriendly import IntEnumFriendly
+from .zone import OnOffStatus, ScheduleType, Zone, ZoneAttribute
 
 
 class Mode(IntEnumFriendly):

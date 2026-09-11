@@ -1,207 +1,149 @@
 # Salus iT500 Integration for Home Assistant
 
-Custom integration for controlling Salus iT500 thermostats in Home Assistant. This integration provides full control over your heating system including temperature control, heating modes, and hot water (if supported by your system).
+Custom integration for Salus iT500 thermostats (RT301i, RT300, RT500 and other devices of the Salus iT500 cloud service). It controls heating zones and hot water through the Salus iT500 cloud API (Arrayent backend).
 
 ## Features
 
-- **Full Heating Control**
-  - Set temperature
-  - Multiple HVAC modes (Heat, Off)
-  - Preset modes (Auto, Manual, Temp Hold)
-  - Real-time temperature monitoring
-  - Relay status (heating/idle)
-  - Support for multi-zone systems (CH1, CH2)
+- **Heating control**
+  - Target temperature in 0.5 °C steps (5–34.5 °C)
+  - HVAC modes Heat / Off, `climate.turn_on` / `climate.turn_off`
+  - Preset modes Auto (schedule), Manual, Temporary hold
+  - Room temperature and relay (heating / idle) status
+  - Two heating zones on CH1 + CH2 systems
+- **Hot water control** (CH1 + hot water systems)
+  - Auto (schedule), Boost (one-time heating), Always on, Off
+- **Responsive control**
+  - The commanded state is shown immediately. Salus API reports changes after 10–30 seconds, so the state is confirmed 5 and 20 seconds after a command.
+  - Commands rejected by Salus are reported as errors in Home Assistant.
+  - Temporary Salus API failures (HTTP 5xx, timeouts) are retried; the last known state is kept during API outages of up to 10 minutes.
+- **Setup**
+  - Configuration in the UI, re-authentication when the password is rejected
+  - Setup is retried automatically while Salus API is unavailable
+  - Passwords with special characters silently removed by Salus are handled
 
-- **Hot Water Control** (if supported)
-  - Auto mode (follows schedule)
-  - Boost mode (one-time heating)
-  - Manual on/off
-  - Status monitoring
+## Requirements
 
-- **Modern Architecture**
-  - Async implementation using pyit500 library
-  - Uses official Salus API (Arrayent backend)
-  - Config flow for easy setup via UI
-  - Update coordinator for efficient polling
-  - No more IP blocking issues (unlike web scraping method)
+- Home Assistant 2025.2 or newer
+- Salus iT500 account with at least one device
 
 ## Installation
 
-### HACS (Recommended)
+### HACS
 
-1. Add this repository to HACS as a custom repository
-2. Search for "Salus iT500" in HACS
-3. Click Install
-4. Restart Home Assistant
+1. HACS → ⋮ → **Custom repositories** → add `https://github.com/Peterka35/salus-it500-cloud` as **Integration**
+2. Install **Salus iT500**
+3. Restart Home Assistant
 
-### Manual Installation
+### Manual installation
 
-1. Copy the `custom_components/salusfy` folder to your Home Assistant `config/custom_components/` directory
+1. Copy the `custom_components/salusfy` folder to `config/custom_components/`
 2. Restart Home Assistant
 
 ## Configuration
 
-### UI Configuration (Recommended)
+1. **Settings** → **Devices & Services** → **Add Integration**
+2. Search for **Salus iT500**
+3. Enter the e-mail and password of your Salus account
 
-1. Go to **Settings** → **Devices & Services**
-2. Click **+ Add Integration**
-3. Search for **Salus iT500**
-4. Enter your Salus account credentials:
-   - **Email**: Your Salus account email
-   - **Password**: Your Salus account password
-5. Click **Submit**
+The first thermostat of the account is added. Add each Salus account as a separate entry.
 
-The integration will automatically discover your device and create appropriate entities.
+## Entities
 
-### YAML Configuration (Legacy - Not Recommended)
+Each thermostat is a device named after its description in the Salus app.
 
-While this integration now uses config entries, you can still add it via YAML if needed:
+| Platform | Name | Created |
+|---|---|---|
+| climate | `<device> Heating Zone 1` | always |
+| climate | `<device> Heating Zone 2` | CH1 + CH2 systems |
+| water_heater | `<device> Teplá voda` | CH1 + hot water systems |
 
-```yaml
-# Note: This is deprecated. Please use UI configuration instead.
-```
+- Climate attributes: `frost_active`, `schedule_type`
+- Water heater attributes: `schedule_type`, `running_mode`, `boost_remaining_hours` (in boost mode)
+- `climate.set_hvac_mode` with `heat` switches the thermostat to Auto (schedule). `climate.turn_on` does the same for a turned off thermostat; a thermostat already heating keeps its mode.
 
-## Entities Created
+## Automation examples
 
-### Climate Entities
-
-For each heating zone in your system:
-
-- **climate.salus_it500_heating_zone_1** (always created)
-- **climate.salus_it500_heating_zone_2** (only if you have a 2-zone system)
-
-Each climate entity provides:
-- Current temperature
-- Target temperature (5-34.5°C)
-- HVAC modes: Heat, Off
-- Preset modes:
-  - **Auto**: Follow scheduled program
-  - **Manual**: Manual temperature control
-  - **Temp Hold**: Temporary temperature override
-- Additional attributes:
-  - Frost protection status
-  - Schedule type
-
-### Water Heater Entity
-
-If your system supports hot water:
-
-- **water_heater.salus_it500_hot_water**
-
-Provides:
-- Operation modes:
-  - **Auto**: Follow scheduled program
-  - **Boost**: One-time heating cycle
-  - **On**: Always on
-  - **Off**: Always off
-- Current status (on/off)
-- Additional attributes:
-  - Schedule type
-  - Running mode
-  - Boost remaining hours (when in boost mode)
-
-## Usage Examples
-
-### Automations
-
-#### Morning Heating Boost
+### Manual temperature in the morning
 
 ```yaml
 automation:
-  - alias: "Morning Heating Boost"
-    trigger:
-      - platform: time
+  - alias: "Morning heating"
+    triggers:
+      - trigger: time
         at: "06:00:00"
-    action:
-      - service: climate.set_preset_mode
+    actions:
+      - action: climate.set_preset_mode
         target:
-          entity_id: climate.salus_it500_heating_zone_1
+          entity_id: climate.my_home_heating_zone_1
         data:
-          preset_mode: "manual"
-      - service: climate.set_temperature
+          preset_mode: manual
+      - action: climate.set_temperature
         target:
-          entity_id: climate.salus_it500_heating_zone_1
+          entity_id: climate.my_home_heating_zone_1
         data:
           temperature: 22
 ```
 
-#### Hot Water Boost
+### Hot water boost
 
 ```yaml
 automation:
-  - alias: "Hot Water Boost"
-    trigger:
-      - platform: time
+  - alias: "Hot water boost"
+    triggers:
+      - trigger: time
         at: "18:00:00"
-    action:
-      - service: water_heater.set_operation_mode
+    actions:
+      - action: water_heater.set_operation_mode
         target:
-          entity_id: water_heater.salus_it500_hot_water
+          entity_id: water_heater.my_home_tepla_voda
         data:
-          operation_mode: "boost"
+          operation_mode: boost
 ```
 
-#### Return to Schedule
+### Return to schedule at night
 
 ```yaml
 automation:
-  - alias: "Return to Schedule at Night"
-    trigger:
-      - platform: time
+  - alias: "Return to schedule"
+    triggers:
+      - trigger: time
         at: "22:00:00"
-    action:
-      - service: climate.set_preset_mode
+    actions:
+      - action: climate.set_preset_mode
         target:
-          entity_id: climate.salus_it500_heating_zone_1
+          entity_id: climate.my_home_heating_zone_1
         data:
-          preset_mode: "auto"
+          preset_mode: auto
 ```
 
 ## Troubleshooting
 
-### Authentication Failed
+- **Re-authentication requested** – Salus rejected the saved password. Check that you can log in to the Salus app and enter the current password in the repair notification.
+- **Integration keeps retrying setup** – Salus API is not available; the setup continues automatically when it responds again.
+- **Command failed** – Salus did not accept the command or did not respond; the error is shown in Home Assistant.
 
-- Verify your email and password are correct
-- Try logging into https://salus-it500.com to confirm credentials
-- Check if you can log into the Salus mobile app
+Debug logging:
 
-### No Devices Found
+```yaml
+logger:
+  logs:
+    custom_components.salusfy: debug
+```
 
-- Ensure you have at least one Salus iT500 device registered to your account
-- Check that your device is online and connected to the internet
-- Try restarting your thermostat
+Logs do not contain the account e-mail, password hashes or server responses. More details (in Czech) are in [TROUBLESHOOTING.md](TROUBLESHOOTING.md).
 
-### Integration Not Loading
+## Development
 
-- Check Home Assistant logs for errors
-- Ensure all dependencies are installed (aiohttp, xmltodict)
-- Try removing and re-adding the integration
+```bash
+pip install homeassistant pytest pytest-asyncio xmltodict ruff
+pytest
+ruff check && ruff format --check
+```
 
-## Supported Devices
+Ruff and pytest settings are in `pyproject.toml`.
 
-This integration supports Salus iT500 thermostats including:
-- RT301i
-- RT300
-- RT500
-- Other models compatible with the Salus iT500 cloud service
+## Credits and license
 
-## Differences from Old Version
-
-The new version (1.0.0) has significant improvements over the old version (0.0.x):
-
-| Feature | Old Version | New Version |
-|---------|-------------|-------------|
-| Configuration | YAML with device ID | UI with auto-discovery |
-| API Method | Web scraping | Official API |
-| Implementation | Synchronous | Async |
-| Preset Modes | No | Yes (Auto/Manual/Temp Hold) |
-| Hot Water | No | Yes |
-| Multi-Zone | No | Yes |
-| IP Blocking Issues | Yes | No |
-| Update Method | Polling with requests | Coordinator with aiohttp |
-
-## Credits
-
-- Based on the [pyit500](https://github.com/) library
-- Original salusfy component by @floringhimie
-- Updated to v1.0.0 with full pyit500 integration
+- The API client in `custom_components/salusfy/pyit500` is based on the **pyit500** library by Richard Archer, MIT license – see [its license](custom_components/salusfy/pyit500/LICENSE).
+- The integration domain `salusfy` comes from the original [salusfy](https://github.com/floringhimie/salusfy) component by @floringhimie; this implementation is a rewrite on top of pyit500.
+- MIT License – see [LICENSE](LICENSE).

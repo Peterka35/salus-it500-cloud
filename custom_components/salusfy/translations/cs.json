@@ -8,6 +8,13 @@
           "username": "Email",
           "password": "Heslo"
         }
+      },
+      "reauth_confirm": {
+        "title": "Nové přihlášení k Salus iT500",
+        "description": "Salus odmítl uložené heslo účtu {username}. Zadejte aktuální heslo.",
+        "data": {
+          "password": "Heslo"
+        }
       }
     },
     "error": {
@@ -17,22 +24,13 @@
       "unknown": "Došlo k neočekávané chybě"
     },
     "abort": {
-      "already_configured": "Účet je již nakonfigurován"
+      "already_configured": "Účet je již nakonfigurován",
+      "reauth_successful": "Přihlášení bylo obnoveno"
     }
   },
   "entity": {
-    "water_heater": {
-      "salusfy": {
-        "state": {
-          "auto": "Automatický",
-          "boost": "Boost",
-          "on": "Trvale zapnuto",
-          "off": "Vypnuto"
-        }
-      }
-    },
     "climate": {
-      "salusfy": {
+      "thermostat": {
         "state_attributes": {
           "preset_mode": {
             "state": {
@@ -43,6 +41,28 @@
           }
         }
       }
+    },
+    "water_heater": {
+      "hot_water": {
+        "state_attributes": {
+          "operation_mode": {
+            "state": {
+              "auto": "Automatický",
+              "boost": "Boost",
+              "on": "Trvale zapnuto",
+              "off": "Vypnuto"
+            }
+          }
+        }
+      }
+    }
+  },
+  "exceptions": {
+    "invalid_auth": {
+      "message": "Salus odmítl přihlašovací údaje, přihlaste integraci znovu"
+    },
+    "command_failed": {
+      "message": "Příkaz pro Salus iT500 selhal: {error}"
     }
   }
 }

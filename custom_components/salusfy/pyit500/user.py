@@ -1,6 +1,7 @@
 """Module to provide the User class"""
-import xmltodict
+
 from .auth import Auth
+from .parsing import parse_response
 
 
 class User:
@@ -15,7 +16,7 @@ class User:
 
     # User Class Methods
     @classmethod
-    async def async_get_user(cls, auth: Auth, user_id: int = None) -> "User":
+    async def async_get_user(cls, auth: Auth, user_id: int | None = None) -> "User":
         """Returns the signed in user."""
         if user_id is None and auth.get_user_id():
             user_id = auth.get_user_id()
@@ -42,16 +43,12 @@ class User:
 
     async def async_update(self):
         """Update the user data."""
-        resp = await self.auth.request(
-            "post", "getUserValueList", data={"userId": self._user_id}
-        )
-        resp.raise_for_status()
-        self.raw_data = xmltodict.parse(
-            await resp.text(),
-            xml_attribs=False,
+        self.raw_data = parse_response(
+            await self.auth.request("post", "getUserValueList", data={"userId": self._user_id}),
+            "ns1:getUserValueListResponse",
             force_list=("valist",),
             postprocessor=User.xml_postprocessor,
-        )["ns1:getUserValueListResponse"]
+        )
         self._user_id = self.raw_data["userId"]
 
     @staticmethod

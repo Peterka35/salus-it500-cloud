@@ -15,18 +15,24 @@ custom_components/salusfy/
 ├── const.py                ← DŮLEŽITÉ!
 ├── manifest.json           ← DŮLEŽITÉ!
 ├── climate.py
+├── coordinator.py
+├── entity.py
 ├── water_heater.py
 ├── strings.json
 ├── translations/
+│   ├── cs.json
 │   └── en.json
 └── pyit500/
     ├── __init__.py
+    ├── LICENSE
     ├── auth.py
     ├── device.py
     ├── devicelistitem.py
     ├── enumfriendly.py
+    ├── exceptions.py
     ├── heatingzone.py
     ├── hotwaterzone.py
+    ├── parsing.py
     ├── pyit500.py
     ├── user.py
     └── zone.py
@@ -109,8 +115,7 @@ Ujistěte se, že žádný soubor neobsahuje syntaktické chyby:
 ### 6. Kontrola verzí
 
 Minimální požadavky:
-- Home Assistant: 2023.1.0+
-- Python: 3.9+
+- Home Assistant: 2025.2.0+
 
 Zkontrolujte verzi v:
 Settings → System → Repairs → Three dots menu → System Information
@@ -139,15 +144,21 @@ except Exception as e:
 ### "Cannot connect" / "Failed to connect"
 
 **Příčiny:**
-- Špatné přihlašovací údaje
 - Problém s internetovým připojením
-- Salus API je nedostupné
+- Salus API je nedostupné nebo vrací chyby
 
 **Řešení:**
-1. Zkontrolujte email a heslo
-2. Zkuste se přihlásit na https://salus-it500.com
-3. Zkuste se přihlásit do mobilní aplikace
-4. Zkontrolujte internetové připojení HA
+1. Zkuste se přihlásit do mobilní aplikace Salus
+2. Zkontrolujte internetové připojení HA
+3. Zkuste to znovu později – již nastavená integrace se při nedostupném API načte automaticky, jakmile API odpoví
+
+### Výzva k novému přihlášení
+
+Salus odmítl uložené heslo (např. po jeho změně). Otevřete oznámení v **Nastavení → Opravy** nebo u integrace a zadejte aktuální heslo.
+
+### "Příkaz pro Salus iT500 selhal"
+
+Salus příkaz nepřijal nebo neodpověděl. Stav v Home Assistantu zůstává podle skutečného stavu termostatu; příkaz zopakujte. Při opakování zapněte debug logování (viz níže).
 
 ### "No devices found"
 
@@ -194,8 +205,7 @@ Před nahlášením problému projděte tento checklist:
 - [ ] manifest.json obsahuje `"config_flow": true`
 - [ ] const.py obsahuje `DOMAIN = "salusfy"`
 - [ ] config_flow.py obsahuje třídu `ConfigFlow`
-- [ ] Verze HA je 2023.1.0+
-- [ ] Python verze je 3.9+
+- [ ] Verze HA je 2025.2.0+
 - [ ] Logy byly zkontrolovány
 - [ ] Debug logging je zapnut
 - [ ] Přihlašovací údaje jsou správné

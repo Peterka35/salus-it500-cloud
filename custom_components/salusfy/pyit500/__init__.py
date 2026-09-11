@@ -1,30 +1,38 @@
 """PyIt500 library for Salus iT500 API."""
+
 from .auth import Auth
-from .pyit500 import PyIt500
 from .device import Device, SystemAttribute, SystemType
-from .zone import Prefix, ZoneAttribute, ScheduleType, OnOffStatus, ActiveStatus
-from .heatingzone import HeatingZone, ConsolidatedMode, AutoTempHoldMode
-from .hotwaterzone import HotWaterZone, Mode as HotWaterMode, RunningMode as HotWaterRunningMode
 from .devicelistitem import DeviceListItem
+from .exceptions import InvalidAuth, SalusCommandError, SalusConnectionError, SalusError
+from .heatingzone import AutoTempHoldMode, ConsolidatedMode, HeatingZone
+from .hotwaterzone import HotWaterZone
+from .hotwaterzone import Mode as HotWaterMode
+from .hotwaterzone import RunningMode as HotWaterRunningMode
+from .pyit500 import PyIt500
 from .user import User
+from .zone import ActiveStatus, OnOffStatus, Prefix, ScheduleType, ZoneAttribute
 
 __all__ = [
-    "Auth",
-    "PyIt500",
-    "Device",
-    "SystemAttribute",
-    "SystemType",
-    "Prefix",
-    "ZoneAttribute",
-    "ScheduleType",
-    "OnOffStatus",
     "ActiveStatus",
-    "HeatingZone",
-    "ConsolidatedMode",
+    "Auth",
     "AutoTempHoldMode",
-    "HotWaterZone",
+    "ConsolidatedMode",
+    "Device",
+    "DeviceListItem",
+    "HeatingZone",
     "HotWaterMode",
     "HotWaterRunningMode",
-    "DeviceListItem",
+    "HotWaterZone",
+    "InvalidAuth",
+    "OnOffStatus",
+    "Prefix",
+    "PyIt500",
+    "SalusCommandError",
+    "SalusConnectionError",
+    "SalusError",
+    "ScheduleType",
+    "SystemAttribute",
+    "SystemType",
     "User",
+    "ZoneAttribute",
 ]

@@ -1,5 +1,36 @@
 # Changelog
 
+## [1.1.0] - 2026-09-11
+
+### ⚡ Rychlejší a spolehlivější ovládání
+- ✅ Po příkazu se nový stav zobrazí okamžitě a platí, dokud ho Salus API nepotvrdí (nejdéle 60 s)
+- ✅ Stav se po příkazu ověří za 5 a 20 sekund (dřívější okamžitá aktualizace vracela ještě starý stav)
+- ✅ Přepnutí z Dočasného přidržení na Automatický režim funguje i přes HVAC režim a už neskončí v Manuálním režimu
+- ✅ Příkaz odmítnutý Salusem se v Home Assistantu zobrazí jako chyba
+- ✅ Termostaty podporují `climate.turn_on` / `climate.turn_off`; zapnutí vypnutého termostatu zapne Automatický režim, termostat, který už topí, režim nemění
+- ✅ Krok teploty 0,5 °C a zaokrouhlení teploty (např. 19,9 °C se posílalo jako 19,89 °C)
+
+### 🛡️ Odolnost
+- ✅ Přechodné chyby Salus API (HTTP 500/502/503/504, timeout, přerušené spojení) se jednou zopakují
+- ✅ Při výpadku API kratším než 10 minut zůstává poslední známý stav a entity nejsou nedostupné
+- ✅ Nedostupné API při startu – Home Assistant načtení integrace později zopakuje (dříve zůstala nenačtená)
+- ✅ Odmítnuté heslo – výzva k novému přihlášení místo selhání integrace
+- ✅ Chyba API při přidávání integrace se hlásí jako problém s připojením, ne jako špatné heslo
+- ✅ Po příkazu se už nespouští neřízená aktualizace na pozadí
+
+### 🔒 Zabezpečení
+- ✅ Logy neobsahují e-mail účtu, část hashe hesla ani odpovědi serveru
+
+### 📝 Technické změny
+- `coordinator.py` – DataUpdateCoordinator s `config_entry`, data v `entry.runtime_data`
+- `entity.py` – entity patří k zařízení (DeviceInfo); ID entit i jejich zobrazované názvy zůstávají stejné
+- `pyit500/exceptions.py` (`InvalidAuth`, `SalusConnectionError`, `SalusCommandError`) a `pyit500/parsing.py`
+- Překlady předvoleb, chyb a nového přihlášení (cs, en)
+- Testy (pytest) ve složce `tests/`
+- Minimální verze Home Assistant 2025.2
+
+---
+
 ## [1.0.7] - 2026-01-14
 
 ### 🔧 Opravy

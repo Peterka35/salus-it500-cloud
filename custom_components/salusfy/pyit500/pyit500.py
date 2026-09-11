@@ -1,11 +1,10 @@
 """Module provising Main API Class"""
 # from typing import List
 
-from typing import List
 from .auth import Auth
-from .user import User
-from .devicelistitem import DeviceListItem
 from .device import Device
+from .devicelistitem import DeviceListItem
+from .user import User
 
 # from .light import Light
 
@@ -25,7 +24,7 @@ class PyIt500:
         """Return the user."""
         return await User.async_get_user(self.auth)
 
-    async def async_get_device_list(self) -> List[DeviceListItem]:
+    async def async_get_device_list(self) -> list[DeviceListItem]:
         """Return a list of devices (in summary)"""
         return await DeviceListItem.async_get_device_list(self.auth)
 

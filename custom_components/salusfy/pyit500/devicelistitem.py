@@ -1,7 +1,7 @@
 """Module to provide the DeviceListItem class"""
-from typing import List
-import xmltodict
+
 from .auth import Auth
+from .parsing import parse_response
 
 
 class DeviceListItem:
@@ -15,16 +15,14 @@ class DeviceListItem:
 
     # Device Class Methods
     @classmethod
-    async def async_get_device_list(cls, auth) -> List["DeviceListItem"]:
+    async def async_get_device_list(cls, auth) -> list["DeviceListItem"]:
         """Return a list of Device List Items."""
-        resp = await auth.request("post", "getDeviceList")
-        resp.raise_for_status()
-        return [
-            DeviceListItem(device_list_item, auth)
-            for device_list_item in xmltodict.parse(
-                await resp.text(), xml_attribs=False, force_list=("devList",)
-            )["ns1:getDeviceListResponse"]["devList"]
-        ]
+        response = parse_response(
+            await auth.request("post", "getDeviceList"),
+            "ns1:getDeviceListResponse",
+            force_list=("devList",),
+        )
+        return [DeviceListItem(device_list_item, auth) for device_list_item in (response or {}).get("devList", [])]
 
     @property
     def device_id(self) -> int:

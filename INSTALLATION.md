@@ -14,19 +14,25 @@ Zkopírujte celou složku `custom_components/salusfy` do vaší Home Assistant k
           ├── climate.py
           ├── config_flow.py
           ├── const.py
+          ├── coordinator.py
+          ├── entity.py
           ├── manifest.json
           ├── strings.json
           ├── water_heater.py
           ├── translations/
+          │   ├── cs.json
           │   └── en.json
           └── pyit500/
               ├── __init__.py
+              ├── LICENSE
               ├── auth.py
               ├── device.py
               ├── devicelistitem.py
               ├── enumfriendly.py
+              ├── exceptions.py
               ├── heatingzone.py
               ├── hotwaterzone.py
+              ├── parsing.py
               ├── pyit500.py
               ├── user.py
               └── zone.py
@@ -71,6 +77,8 @@ Tato chyba může nastat, pokud:
 1. Zkontrolujte své přihlašovací údaje
 2. Zkuste se přihlásit na https://salus-it500.com
 3. Zkontrolujte, že máte aktivní účet
+
+Pokud Salus odmítne heslo u již nastavené integrace, Home Assistant zobrazí výzvu k novému přihlášení. Stačí v ní zadat aktuální heslo.
 
 ### Chyba: "No devices found"
 
@@ -126,7 +134,7 @@ Po instalaci nové verze:
 3. **DŮLEŽITÉ**: Entity ID se může změnit, aktualizujte své automatizace!
 
    Staré: `climate.salus_thermostat`
-   Nové: `climate.salus_it500_heating_zone_1`
+   Nové: `climate.<název_zařízení>_heating_zone_1`
 
 ## Kontrola Instalace
 
@@ -146,9 +154,11 @@ Po úspěšné instalaci byste měli vidět:
 
 1. **Settings → Devices & Services → Salus iT500**
 2. **Developer Tools → States:**
-   - `climate.salus_it500_heating_zone_1` (vždy)
-   - `climate.salus_it500_heating_zone_2` (pokud máte 2 zóny)
-   - `water_heater.salus_it500_hot_water` (pokud máte ohřev vody)
+   - `climate.<název_zařízení>_heating_zone_1` (vždy)
+   - `climate.<název_zařízení>_heating_zone_2` (pokud máte 2 zóny)
+   - `water_heater.<název_zařízení>_tepla_voda` (pokud máte ohřev vody)
+
+   Název zařízení je popis termostatu v aplikaci Salus.
 
 ## Získání Podpory
 
@@ -172,7 +182,6 @@ Pokud problém přetrvává:
 
 ## Minimum Požadavky
 
-- Home Assistant 2023.1.0 nebo novější
-- Python 3.9 nebo novější
+- Home Assistant 2025.2.0 nebo novější
 - Salus iT500 účet s alespoň jedním zařízením
 - Internetové připojení

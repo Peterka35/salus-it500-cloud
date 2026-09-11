@@ -1,5 +1,7 @@
 """Module to provide the Zone base class"""
-from typing import Any, TYPE_CHECKING
+
+from typing import TYPE_CHECKING, Any
+
 from .enumfriendly import EnumFriendly, IntEnumFriendly
 
 if TYPE_CHECKING:
@@ -91,9 +93,7 @@ class Zone:
         if attr3 is not None:
             attr3 = self.zone_prefix + attr3.value
 
-        return await self.device.async_control(
-            attr1, attr1_value, attr2, attr2_value, attr3, attr3_value
-        )
+        return await self.device.async_control(attr1, attr1_value, attr2, attr2_value, attr3, attr3_value)
 
     @property
     def program_mon(self) -> str:

@@ -1,8 +1,8 @@
 """Support for Salus iT500 climate devices."""
-import asyncio
-import logging
 
-from aiohttp import ClientResponseError
+from __future__ import annotations
+
+from typing import Any
 
 from homeassistant.components.climate import (
     ClimateEntity,
@@ -10,20 +10,15 @@ from homeassistant.components.climate import (
     HVACAction,
     HVACMode,
 )
-from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import ATTR_TEMPERATURE, UnitOfTemperature
 from homeassistant.core import HomeAssistant
-from homeassistant.exceptions import HomeAssistantError
-from homeassistant.helpers.entity_platform import AddEntitiesCallback
-from homeassistant.helpers.update_coordinator import CoordinatorEntity
+from homeassistant.helpers.entity_platform import AddConfigEntryEntitiesCallback
 
-from . import SalusDataCoordinator
-from .const import DOMAIN
+from .coordinator import SalusConfigEntry, SalusDataCoordinator
+from .entity import SalusEntity
+from .pyit500.device import SystemType, TemperatureUnit
 from .pyit500.heatingzone import ConsolidatedMode, HeatingZone
 from .pyit500.zone import OnOffStatus, Prefix
-from .pyit500.device import SystemType, TemperatureUnit
-
-_LOGGER = logging.getLogger(__name__)
 
 # Preset modes mapping to ConsolidatedMode
 PRESET_AUTO = "auto"
@@ -57,43 +52,45 @@ PRESET_TO_SALUS_MODE = {
     PRESET_TEMP_HOLD: ConsolidatedMode.TEMP_HOLD,
 }
 
+ZONE_NAMES = {
+    Prefix.CH1: "Heating Zone 1",
+    Prefix.CH2: "Heating Zone 2",
+}
+
 
 async def async_setup_entry(
     hass: HomeAssistant,
-    entry: ConfigEntry,
-    async_add_entities: AddEntitiesCallback,
+    entry: SalusConfigEntry,
+    async_add_entities: AddConfigEntryEntitiesCallback,
 ) -> None:
     """Set up Salus climate entities from a config entry."""
-    coordinator: SalusDataCoordinator = hass.data[DOMAIN][entry.entry_id]
-
-    entities = []
+    coordinator = entry.runtime_data
 
     # Always add CH1 (primary heating zone)
-    entities.append(SalusThermostat(coordinator, Prefix.CH1, "Heating Zone 1"))
+    entities = [SalusThermostat(coordinator, Prefix.CH1)]
 
     # Add CH2 if system supports it
     if coordinator.device.system_type == SystemType.CH1_CH2:
-        entities.append(SalusThermostat(coordinator, Prefix.CH2, "Heating Zone 2"))
+        entities.append(SalusThermostat(coordinator, Prefix.CH2))
 
     async_add_entities(entities)
 
 
-class SalusThermostat(CoordinatorEntity[SalusDataCoordinator], ClimateEntity):
+class SalusThermostat(SalusEntity, ClimateEntity):
     """Representation of a Salus thermostat."""
 
-    _attr_has_entity_name = False  # We set full name including device name
     _attr_supported_features = (
-        ClimateEntityFeature.TARGET_TEMPERATURE | ClimateEntityFeature.PRESET_MODE
+        ClimateEntityFeature.TARGET_TEMPERATURE
+        | ClimateEntityFeature.PRESET_MODE
+        | ClimateEntityFeature.TURN_ON
+        | ClimateEntityFeature.TURN_OFF
     )
     _attr_hvac_modes = [HVACMode.OFF, HVACMode.HEAT]
     _attr_preset_modes = PRESET_MODES
+    _attr_target_temperature_step = 0.5
+    _attr_translation_key = "thermostat"
 
-    def __init__(
-        self,
-        coordinator: SalusDataCoordinator,
-        zone_prefix: Prefix,
-        name: str,
-    ) -> None:
+    def __init__(self, coordinator: SalusDataCoordinator, zone_prefix: Prefix) -> None:
         """Initialize the thermostat."""
         super().__init__(coordinator)
         self._zone_prefix = zone_prefix
@@ -104,12 +101,8 @@ class SalusThermostat(CoordinatorEntity[SalusDataCoordinator], ClimateEntity):
         else:
             self._attr_temperature_unit = UnitOfTemperature.CELSIUS
 
-        # Use device name as prefix for entity name
-        device_name = coordinator.device.description or "Salus iT500"
-        self._attr_name = f"{device_name} {name}"
-        self._attr_unique_id = (
-            f"{coordinator.device.device_id}_{zone_prefix.value}_climate"
-        )
+        self._attr_name = ZONE_NAMES[zone_prefix]
+        self._attr_unique_id = f"{coordinator.device.device_id}_{zone_prefix.value}_climate"
 
     @property
     def _zone(self) -> HeatingZone:
@@ -163,76 +156,30 @@ class SalusThermostat(CoordinatorEntity[SalusDataCoordinator], ClimateEntity):
             return 94.0  # 34.5°C ≈ 94°F
         return 34.5
 
-    async def async_set_temperature(self, **kwargs) -> None:
+    async def async_set_temperature(self, **kwargs: Any) -> None:
         """Set new target temperature."""
         if (temperature := kwargs.get(ATTR_TEMPERATURE)) is None:
             return
-
-        try:
-            await self._zone.async_set_current_setpoint(temperature)
-            await self.coordinator.async_request_refresh()
-        except ClientResponseError as err:
-            _LOGGER.error(
-                "Failed to set temperature to %s: API returned %s - %s",
-                temperature,
-                err.status,
-                err.message,
-            )
-            raise HomeAssistantError(
-                f"Failed to set temperature: API error {err.status}"
-            ) from err
+        await self.coordinator.async_send_command(lambda: self._zone.async_set_current_setpoint(temperature))
 
     async def async_set_hvac_mode(self, hvac_mode: HVACMode) -> None:
         """Set new target hvac mode."""
-        if hvac_mode not in HVAC_MODE_TO_SALUS:
-            _LOGGER.error("Unsupported HVAC mode: %s", hvac_mode)
-            return
-
         salus_mode = HVAC_MODE_TO_SALUS[hvac_mode]
-        try:
-            await self._zone.async_set_consolidated_mode(salus_mode)
-            await self.coordinator.async_request_refresh()
-        except ClientResponseError as err:
-            _LOGGER.error(
-                "Failed to set HVAC mode to %s: API returned %s - %s",
-                hvac_mode,
-                err.status,
-                err.message,
-            )
-            raise HomeAssistantError(
-                f"Failed to set HVAC mode: API error {err.status}"
-            ) from err
+        await self.coordinator.async_send_command(lambda: self._zone.async_set_consolidated_mode(salus_mode))
+
+    async def async_turn_on(self) -> None:
+        """Turn on following the schedule; a thermostat already heating keeps its mode."""
+        if self.hvac_mode == HVACMode.OFF:
+            await self.async_set_hvac_mode(HVACMode.HEAT)
+
+    async def async_turn_off(self) -> None:
+        """Turn off."""
+        await self.async_set_hvac_mode(HVACMode.OFF)
 
     async def async_set_preset_mode(self, preset_mode: str) -> None:
         """Set new preset mode."""
-        if preset_mode not in PRESET_TO_SALUS_MODE:
-            _LOGGER.error("Unsupported preset mode: %s", preset_mode)
-            return
-
         salus_mode = PRESET_TO_SALUS_MODE[preset_mode]
-        current_mode = self._zone.consolidated_mode
-
-        try:
-            # Workaround for Salus API quirk: Direct TEMP_HOLD → AUTO transition doesn't stick
-            # Need to go through MANUAL mode first to clear the temp_hold state
-            if current_mode == ConsolidatedMode.TEMP_HOLD and salus_mode == ConsolidatedMode.AUTO:
-                _LOGGER.debug("Switching from TEMP_HOLD to AUTO via MANUAL mode")
-                await self._zone.async_set_consolidated_mode(ConsolidatedMode.MANUAL)
-                # Small delay to let API process the manual mode change
-                await asyncio.sleep(0.5)
-
-            await self._zone.async_set_consolidated_mode(salus_mode)
-            await self.coordinator.async_request_refresh()
-        except ClientResponseError as err:
-            _LOGGER.error(
-                "Failed to set preset mode to %s: API returned %s - %s",
-                preset_mode,
-                err.status,
-                err.message,
-            )
-            raise HomeAssistantError(
-                f"Failed to set preset mode: API error {err.status}"
-            ) from err
+        await self.coordinator.async_send_command(lambda: self._zone.async_set_consolidated_mode(salus_mode))
 
     @property
     def extra_state_attributes(self) -> dict:

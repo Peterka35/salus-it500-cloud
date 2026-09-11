@@ -1,26 +1,22 @@
 """Support for Salus iT500 water heater devices."""
-import logging
 
-from aiohttp import ClientResponseError
+from __future__ import annotations
+
+from typing import Any
 
 from homeassistant.components.water_heater import (
     WaterHeaterEntity,
     WaterHeaterEntityFeature,
 )
-from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import STATE_OFF, STATE_ON
 from homeassistant.core import HomeAssistant
-from homeassistant.exceptions import HomeAssistantError
-from homeassistant.helpers.entity_platform import AddEntitiesCallback
-from homeassistant.helpers.update_coordinator import CoordinatorEntity
+from homeassistant.helpers.entity_platform import AddConfigEntryEntitiesCallback
 
-from . import SalusDataCoordinator
-from .const import DOMAIN
-from .pyit500.hotwaterzone import Mode as HotWaterMode, HotWaterZone
-from .pyit500.zone import OnOffStatus
+from .coordinator import SalusConfigEntry, SalusDataCoordinator
+from .entity import SalusEntity
 from .pyit500.device import SystemType
-
-_LOGGER = logging.getLogger(__name__)
+from .pyit500.hotwaterzone import HotWaterZone
+from .pyit500.hotwaterzone import Mode as HotWaterMode
 
 # Operation modes
 OPERATION_AUTO = "auto"
@@ -48,41 +44,32 @@ SALUS_TO_OPERATION = {
 
 async def async_setup_entry(
     hass: HomeAssistant,
-    entry: ConfigEntry,
-    async_add_entities: AddEntitiesCallback,
+    entry: SalusConfigEntry,
+    async_add_entities: AddConfigEntryEntitiesCallback,
 ) -> None:
     """Set up Salus water heater entities from a config entry."""
-    coordinator: SalusDataCoordinator = hass.data[DOMAIN][entry.entry_id]
-
-    entities = []
+    coordinator = entry.runtime_data
 
     # Only add hot water if system supports it
     if coordinator.device.system_type == SystemType.CH1_HOT_WATER:
-        entities.append(SalusWaterHeater(coordinator))
-
-    if entities:
-        async_add_entities(entities)
+        async_add_entities([SalusWaterHeater(coordinator)])
 
 
-class SalusWaterHeater(CoordinatorEntity[SalusDataCoordinator], WaterHeaterEntity):
+class SalusWaterHeater(SalusEntity, WaterHeaterEntity):
     """Representation of a Salus hot water heater."""
 
-    _attr_has_entity_name = False  # We set full name including device name
     _attr_supported_features = WaterHeaterEntityFeature.OPERATION_MODE
     _attr_temperature_unit = None  # Water heater doesn't use temperature
+    _attr_operation_list = OPERATION_LIST
+    _attr_min_temp = None
+    _attr_max_temp = None
+    _attr_name = "Teplá voda"
+    _attr_translation_key = "hot_water"
 
     def __init__(self, coordinator: SalusDataCoordinator) -> None:
         """Initialize the water heater."""
         super().__init__(coordinator)
-
-        # Use device name as prefix for entity name
-        device_name = coordinator.device.description or "Salus iT500"
-        self._attr_name = f"{device_name} Teplá voda"
-
         self._attr_unique_id = f"{coordinator.device.device_id}_hw_water_heater"
-        self._attr_operation_list = OPERATION_LIST
-        self._attr_min_temp = None
-        self._attr_max_temp = None
 
     @property
     def _zone(self) -> HotWaterZone:
@@ -108,33 +95,14 @@ class SalusWaterHeater(CoordinatorEntity[SalusDataCoordinator], WaterHeaterEntit
 
     async def async_set_operation_mode(self, operation_mode: str) -> None:
         """Set new operation mode."""
-        if operation_mode not in OPERATION_TO_SALUS:
-            _LOGGER.error("Unsupported operation mode: %s", operation_mode)
-            return
-
         salus_mode = OPERATION_TO_SALUS[operation_mode]
-        try:
-            await self._zone.async_set_mode(salus_mode)
+        await self.coordinator.async_send_command(lambda: self._zone.async_set_mode(salus_mode))
 
-            # Schedule refresh after delay to allow Salus API to process the change
-            # Salus API can take 10-30 seconds to update the state
-            await self.coordinator.async_request_refresh()
-        except ClientResponseError as err:
-            _LOGGER.error(
-                "Failed to set operation mode to %s: API returned %s - %s",
-                operation_mode,
-                err.status,
-                err.message,
-            )
-            raise HomeAssistantError(
-                f"Failed to set operation mode: API error {err.status}"
-            ) from err
-
-    async def async_turn_on(self, **kwargs) -> None:
+    async def async_turn_on(self, **kwargs: Any) -> None:
         """Turn on the water heater."""
         await self.async_set_operation_mode(OPERATION_ON)
 
-    async def async_turn_off(self, **kwargs) -> None:
+    async def async_turn_off(self, **kwargs: Any) -> None:
         """Turn off the water heater."""
         await self.async_set_operation_mode(OPERATION_OFF)
 

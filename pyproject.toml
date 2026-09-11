@@ -1,0 +1,16 @@
+[tool.ruff]
+line-length = 120
+target-version = "py313"
+extend-exclude = ["*.md"]
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "I", "B", "ASYNC", "SIM", "UP", "RUF"]
+ignore = ["E501", "RUF001", "RUF002", "RUF003", "RUF012"]
+
+[tool.ruff.lint.per-file-ignores]
+"tests/*.py" = ["ASYNC109", "ASYNC110"]
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
+pythonpath = ["."]
+testpaths = ["tests"]

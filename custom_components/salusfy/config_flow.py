@@ -1,87 +1,47 @@
 """Config flow for Salus iT500 integration."""
+
 from __future__ import annotations
 
 import logging
+from collections.abc import Mapping
 from typing import Any
 
+import homeassistant.helpers.config_validation as cv
 import voluptuous as vol
-
 from homeassistant import config_entries
 from homeassistant.const import CONF_PASSWORD, CONF_USERNAME
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.aiohttp_client import async_get_clientsession
-import homeassistant.helpers.config_validation as cv
 
 from .const import DOMAIN
 from .pyit500.auth import Auth
+from .pyit500.exceptions import InvalidAuth, SalusError
 from .pyit500.pyit500 import PyIt500
 
 _LOGGER = logging.getLogger(__name__)
-
-
-class CannotConnect(Exception):
-    """Error to indicate we cannot connect."""
-
-
-class InvalidAuth(Exception):
-    """Error to indicate there is invalid auth."""
 
 
 class NoDevices(Exception):
     """Error to indicate no devices found."""
 
 
-async def validate_input(hass: HomeAssistant, data: dict[str, Any]) -> dict[str, Any]:
+async def validate_input(hass: HomeAssistant, data: Mapping[str, Any]) -> dict[str, Any]:
     """Validate the user input allows us to connect."""
-    _LOGGER.info("Starting Salus iT500 configuration validation for user: %s", data[CONF_USERNAME])
-
-    session = async_get_clientsession(hass)
-    auth = Auth(session, data[CONF_USERNAME], data[CONF_PASSWORD])
-
-    # Step 1: Authenticate
-    _LOGGER.debug("Step 1: Attempting authentication...")
-    try:
-        await auth.refresh_token()
-        _LOGGER.info("Authentication successful for user: %s", data[CONF_USERNAME])
-    except Exception as err:
-        _LOGGER.error(
-            "Authentication failed for user %s: %s (%s)",
-            data[CONF_USERNAME], err, type(err).__name__
-        )
-        raise InvalidAuth from err
+    auth = Auth(async_get_clientsession(hass), data[CONF_USERNAME], data[CONF_PASSWORD])
+    await auth.refresh_token()
 
     api = PyIt500(auth)
-
-    # Step 2: Get device list
-    _LOGGER.debug("Step 2: Fetching device list...")
-    try:
-        device_list = await api.async_get_device_list()
-        _LOGGER.info("Found %d device(s)", len(device_list) if device_list else 0)
-        if device_list:
-            for idx, dev in enumerate(device_list):
-                _LOGGER.debug("Device %d: id=%s, name=%s", idx, dev.device_id, dev.name)
-    except Exception as err:
-        _LOGGER.error(
-            "Failed to get device list: %s (%s)",
-            err, type(err).__name__
-        )
-        raise CannotConnect from err
-
+    device_list = await api.async_get_device_list()
     if not device_list:
-        _LOGGER.error("No devices found for user %s", data[CONF_USERNAME])
         raise NoDevices
 
-    # Step 3: Get device details
-    _LOGGER.debug("Step 3: Fetching device details for device_id=%s...", device_list[0].device_id)
     try:
         device = await api.async_get_device(device_list[0].device_id)
         title = device.description or f"Salus iT500 ({device_list[0].name})"
-        _LOGGER.info("Device details retrieved: %s", title)
-    except Exception as err:
-        _LOGGER.warning("Failed to get device details: %s, using fallback title", err)
+    except SalusError as err:
+        _LOGGER.warning("Failed to get device details, using fallback title: %s", err)
         title = f"Salus iT500 ({device_list[0].name})"
 
-    _LOGGER.info("Configuration validation completed successfully")
     return {
         "title": title,
         "device_count": len(device_list),
@@ -93,28 +53,28 @@ class ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
 
     VERSION = 1
 
-    async def async_step_user(self, user_input=None):
+    async def _async_validate(self, data: Mapping[str, Any]) -> tuple[dict[str, Any] | None, dict[str, str]]:
+        """Return account info when the credentials work, otherwise form errors."""
+        try:
+            return await validate_input(self.hass, data), {}
+        except InvalidAuth:
+            return None, {"base": "invalid_auth"}
+        except NoDevices:
+            return None, {"base": "no_devices"}
+        except SalusError as err:
+            _LOGGER.warning("Cannot connect to Salus API: %s", err)
+            return None, {"base": "cannot_connect"}
+        except Exception:
+            _LOGGER.exception("Unexpected exception during config flow")
+            return None, {"base": "unknown"}
+
+    async def async_step_user(self, user_input=None) -> config_entries.ConfigFlowResult:
         """Handle the initial step."""
-        errors = {}
+        errors: dict[str, str] = {}
 
         if user_input is not None:
-            _LOGGER.debug("Config flow: user submitted credentials for %s", user_input.get(CONF_USERNAME))
-            try:
-                info = await validate_input(self.hass, user_input)
-            except CannotConnect:
-                _LOGGER.warning("Config flow: cannot connect to Salus API")
-                errors["base"] = "cannot_connect"
-            except InvalidAuth:
-                _LOGGER.warning("Config flow: invalid authentication for user %s", user_input.get(CONF_USERNAME))
-                errors["base"] = "invalid_auth"
-            except NoDevices:
-                _LOGGER.warning("Config flow: no devices found for user %s", user_input.get(CONF_USERNAME))
-                errors["base"] = "no_devices"
-            except Exception as err:
-                _LOGGER.exception("Unexpected exception during config flow: %s", err)
-                errors["base"] = "unknown"
-            else:
-                _LOGGER.info("Config flow: successfully validated, creating entry for %s", info["title"])
+            info, errors = await self._async_validate(user_input)
+            if info is not None:
                 await self.async_set_unique_id(user_input[CONF_USERNAME].lower())
                 self._abort_if_unique_id_configured()
 
@@ -131,5 +91,28 @@ class ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                     vol.Required(CONF_PASSWORD): cv.string,
                 }
             ),
+            errors=errors,
+        )
+
+    async def async_step_reauth(self, entry_data: Mapping[str, Any]) -> config_entries.ConfigFlowResult:
+        """Handle rejected credentials."""
+        return await self.async_step_reauth_confirm()
+
+    async def async_step_reauth_confirm(self, user_input=None) -> config_entries.ConfigFlowResult:
+        """Ask for the current password of the account."""
+        reauth_entry = self._get_reauth_entry()
+        errors: dict[str, str] = {}
+
+        if user_input is not None:
+            info, errors = await self._async_validate({**reauth_entry.data, CONF_PASSWORD: user_input[CONF_PASSWORD]})
+            if info is not None:
+                return self.async_update_reload_and_abort(
+                    reauth_entry, data_updates={CONF_PASSWORD: user_input[CONF_PASSWORD]}
+                )
+
+        return self.async_show_form(
+            step_id="reauth_confirm",
+            data_schema=vol.Schema({vol.Required(CONF_PASSWORD): cv.string}),
+            description_placeholders={"username": reauth_entry.data[CONF_USERNAME]},
             errors=errors,
         )

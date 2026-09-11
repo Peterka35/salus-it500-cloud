@@ -1,4 +1,5 @@
 """Module to provide the TextEnum classes"""
+
 import enum
 
 

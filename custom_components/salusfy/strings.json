@@ -8,6 +8,13 @@
           "username": "Email",
           "password": "Password"
         }
+      },
+      "reauth_confirm": {
+        "title": "Salus iT500 re-authentication",
+        "description": "Salus rejected the saved password of account {username}. Enter the current password.",
+        "data": {
+          "password": "Password"
+        }
       }
     },
     "error": {
@@ -17,22 +24,13 @@
       "unknown": "Unexpected error occurred"
     },
     "abort": {
-      "already_configured": "Account is already configured"
+      "already_configured": "Account is already configured",
+      "reauth_successful": "Re-authentication was successful"
     }
   },
   "entity": {
-    "water_heater": {
-      "salusfy": {
-        "state": {
-          "auto": "Auto",
-          "boost": "Boost",
-          "on": "Always On",
-          "off": "Off"
-        }
-      }
-    },
     "climate": {
-      "salusfy": {
+      "thermostat": {
         "state_attributes": {
           "preset_mode": {
             "state": {
@@ -43,6 +41,28 @@
           }
         }
       }
+    },
+    "water_heater": {
+      "hot_water": {
+        "state_attributes": {
+          "operation_mode": {
+            "state": {
+              "auto": "Auto",
+              "boost": "Boost",
+              "on": "Always On",
+              "off": "Off"
+            }
+          }
+        }
+      }
+    }
+  },
+  "exceptions": {
+    "invalid_auth": {
+      "message": "Salus rejected the credentials, re-authenticate the integration"
+    },
+    "command_failed": {
+      "message": "Salus iT500 command failed: {error}"
     }
   }
 }

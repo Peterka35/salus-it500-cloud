@@ -1,12 +1,12 @@
 {
   "domain": "salusfy",
   "name": "Salus iT500",
-  "version": "1.0.7",
-  "documentation": "https://github.com/floringhimie/salusfy",
-  "issue_tracker": "https://github.com/floringhimie/salusfy/issues",
-  "requirements": ["aiohttp>=3.8.0", "xmltodict>=0.13.0"],
+  "codeowners": ["@Peterka35"],
+  "config_flow": true,
   "dependencies": [],
-  "codeowners": ["@floringhimie"],
+  "documentation": "https://github.com/Peterka35/salus-it500-cloud",
   "iot_class": "cloud_polling",
-  "config_flow": true
+  "issue_tracker": "https://github.com/Peterka35/salus-it500-cloud/issues",
+  "requirements": ["xmltodict>=0.13.0"],
+  "version": "1.1.0"
 }

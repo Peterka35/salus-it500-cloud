@@ -1,12 +1,19 @@
 """Module to provide the Device class"""
+
+import time
+from collections.abc import Callable
 from typing import Any
-from asyncio import sleep, create_task
-import xmltodict
+
 from .auth import Auth
-from .zone import Prefix, OnOffStatus
+from .enumfriendly import EnumFriendly, IntEnumFriendly
+from .exceptions import SalusCommandError, SalusConnectionError
 from .heatingzone import HeatingZone
 from .hotwaterzone import HotWaterZone
-from .enumfriendly import EnumFriendly, IntEnumFriendly
+from .parsing import parse_response
+from .zone import OnOffStatus, Prefix
+
+# Salus API reports commanded values after 10-30 seconds
+PENDING_VALUE_SECONDS = 60
 
 
 class SystemAttribute(EnumFriendly):
@@ -50,15 +57,29 @@ class TemperatureUnit(IntEnumFriendly):
     FAHRENHEIT = 1
 
 
+def _api_value(value: Any) -> str:
+    """Return attribute value as sent to and reported by the API."""
+    return str(int(value)) if isinstance(value, int) else str(value)
+
+
 class Device:
     """Class that represents a Device object in the Salus iT500 API."""
 
     # Constructor
-    def __init__(self, device_id: int, raw_data: dict, auth: Auth):
+    def __init__(
+        self,
+        device_id: int,
+        raw_data: dict,
+        auth: Auth,
+        clock: Callable[[], float] = time.monotonic,
+    ):
         """Initialise a device object."""
         self._device_id = int(device_id)
         self.raw_data = raw_data
         self.auth = auth
+        self._clock = clock
+        # Commanded attribute values the API does not report yet: name -> (value, expiry)
+        self._pending: dict[str, tuple[str, float]] = {}
         self.ch1 = HeatingZone(self, Prefix.CH1)
         self.ch2 = HeatingZone(self, Prefix.CH2)
         self.hw = HotWaterZone(self, Prefix.HW)
@@ -139,48 +160,67 @@ class Device:
         return await self.async_control(attr.value, attr_value)
 
     def get_raw_attr(self, attr) -> Any:
-        """Return the value of an attribute in the Device raw data."""
+        """Return the value of an attribute in the Device raw data.
+        A recently commanded value is returned until the API reports it."""
+        pending = self._pending.get(attr)
+        if pending is not None and self._clock() < pending[1]:
+            return pending[0]
         return self.raw_data["attrList:" + attr]["value"]
 
     async def async_control(
         self,
         attr1_name: str,
-        attr1_value: str,
-        attr2_name: str = None,
-        attr2_value: str = None,
-        attr3_name: str = None,
-        attr3_value: str = None,
+        attr1_value: Any,
+        attr2_name: str | None = None,
+        attr2_value: Any = None,
+        attr3_name: str | None = None,
+        attr3_value: Any = None,
     ) -> int:
-        """Control the device."""
-        params = {"devId": self.device_id, "name1": attr1_name, "value1": attr1_value}
+        """Control the device.
+        Raises SalusCommandError when the API does not accept the command."""
+        values = {attr1_name: _api_value(attr1_value)}
         if attr2_name is not None:
-            params["name2"] = attr2_name
-            params["value2"] = attr2_value
+            values[attr2_name] = _api_value(attr2_value)
         if attr3_name is not None:
-            params["name3"] = attr3_name
-            params["value3"] = attr3_value
+            values[attr3_name] = _api_value(attr3_value)
 
-        resp = await self.auth.request(
-            "get", "setMultiDeviceAttributes2", params=params
-        )
-        resp.raise_for_status()
-        create_task(self.async_update(1))
-        return int(
-            xmltodict.parse(await resp.text(), xml_attribs=False)[
-                "ns1:setMultiDeviceAttributes2Response"
-            ]["retCode"]
-        )
+        params = {"devId": self.device_id}
+        for index, (name, value) in enumerate(values.items(), start=1):
+            params[f"name{index}"] = name
+            params[f"value{index}"] = value
 
-    async def async_update(self, delay=0):
+        response = parse_response(
+            await self.auth.request("get", "setMultiDeviceAttributes2", params=params),
+            "ns1:setMultiDeviceAttributes2Response",
+        )
+        try:
+            ret_code = int(response["retCode"])
+        except (KeyError, TypeError, ValueError) as err:
+            raise SalusConnectionError("Unexpected Salus API response to a command") from err
+        if ret_code != 0:
+            raise SalusCommandError(f"Salus API rejected the command (retCode {ret_code})")
+
+        expiry = self._clock() + PENDING_VALUE_SECONDS
+        self._pending.update({name: (value, expiry) for name, value in values.items()})
+        return ret_code
+
+    async def async_update(self):
         """Update the device data."""
-        await sleep(delay)
-        resp = await self.auth.request(
-            "post", "getDeviceAttributesWithValues", data={"devId": self.device_id}
+        raw_data = parse_response(
+            await self.auth.request("post", "getDeviceAttributesWithValues", data={"devId": self.device_id}),
+            "ns1:getDeviceAttributesWithValuesResponse",
+            postprocessor=Device.xml_postprocessor,
         )
-        resp.raise_for_status()
-        self.raw_data = xmltodict.parse(
-            await resp.text(), xml_attribs=False, postprocessor=Device.xml_postprocessor
-        )["ns1:getDeviceAttributesWithValuesResponse"]
+        if not isinstance(raw_data, dict):
+            raise SalusConnectionError("Salus API returned no device attributes")
+        self.raw_data = raw_data
+
+        now = self._clock()
+        self._pending = {
+            name: (value, expiry)
+            for name, (value, expiry) in self._pending.items()
+            if now < expiry and (raw_data.get("attrList:" + name) or {}).get("value") != value
+        }
 
     @staticmethod
     def xml_postprocessor(_path, key, value) -> tuple:

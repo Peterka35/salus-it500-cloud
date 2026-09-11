@@ -113,11 +113,11 @@ Thumbs.db
 *.backup
 *.old
 
-# Working files
+# Working files (repository root only, tests/ is part of the repository)
 verify_install.py
 verify_install.bat
-test_*.py
-debug_*.py
+/test_*.py
+/debug_*.py
 
 # Local build artifacts and tool caches
 salusfy.zip

@@ -1,6 +1,12 @@
 """Module to provide the HeatingZone class"""
-from .zone import Zone, ZoneAttribute, ScheduleType, ActiveStatus, OnOffStatus
+
+import asyncio
+
 from .enumfriendly import EnumFriendly, IntEnumFriendly
+from .zone import ActiveStatus, OnOffStatus, ScheduleType, Zone, ZoneAttribute
+
+# Pause letting Salus API process manual mode before switching to auto mode
+MODE_SWITCH_DELAY_SECONDS = 0.5
 
 
 class AutoTempHoldMode(IntEnumFriendly):
@@ -37,7 +43,7 @@ class HeatingZone(Zone):
     async def async_set_current_setpoint(self, value: float) -> int:
         """Set the Zone's current setpoint, in C.
         The API will change the mode if required."""
-        return await self.async_set_attr(ZoneAttribute.CH_CURRENT_SETPOINT, int(value * 100))
+        return await self.async_set_attr(ZoneAttribute.CH_CURRENT_SETPOINT, round(value * 100))
 
     @property
     def schedule_type(self) -> ScheduleType:
@@ -52,9 +58,7 @@ class HeatingZone(Zone):
     @property
     def auto_temp_hold_mode(self) -> AutoTempHoldMode:
         """Return the Zone's auto mode / temp hold mode."""
-        return AutoTempHoldMode(
-            int(self.get_attr(ZoneAttribute.CH_AUTO_TEMP_HOLD_MODE))
-        )
+        return AutoTempHoldMode(int(self.get_attr(ZoneAttribute.CH_AUTO_TEMP_HOLD_MODE)))
 
     async def async_set_auto_temp_hold_mode(self, value: AutoTempHoldMode):
         """Set the Zone's auto mode / temp hold mode."""
@@ -96,9 +100,7 @@ class HeatingZone(Zone):
 
     async def async_set_manual_mode_setpoint(self, value: float) -> int:
         """Set the Zone's manual mode setpoint, in C."""
-        return await self.async_set_attr(
-            ZoneAttribute.CH_MANUAL_MODE_SETPOINT, int(value * 100)
-        )
+        return await self.async_set_attr(ZoneAttribute.CH_MANUAL_MODE_SETPOINT, round(value * 100))
 
     @property
     def auto_mode_setpoint(self) -> float:
@@ -107,17 +109,13 @@ class HeatingZone(Zone):
 
     async def async_set_auto_mode_setpoint(self, value: float) -> int:
         """Set the Zone's auto mode setpoint, in C."""
-        return await self.async_set_attr(
-            ZoneAttribute.CH_AUTO_MODE_SETPOINT, int(value * 100)
-        )
+        return await self.async_set_attr(ZoneAttribute.CH_AUTO_MODE_SETPOINT, round(value * 100))
 
     @property
     def consolidated_mode(self) -> ConsolidatedMode:
         """Return the Zone's consolidated heating mode."""
         try:
-            return ConsolidatedMode(
-                (self.off_mode, self.manual_mode, self.auto_temp_hold_mode)
-            )
+            return ConsolidatedMode((self.off_mode, self.manual_mode, self.auto_temp_hold_mode))
         except ValueError:
             return ConsolidatedMode.UNKNOWN
 
@@ -125,12 +123,22 @@ class HeatingZone(Zone):
         """Set the Zone's consolidated heating mode.
         This will update the off, manual and auto temp hold mode accordingly.
 
+        Note: Direct temporary hold to auto transition does not stick in Salus API,
+        so manual mode is set first."""
+        if value == ConsolidatedMode.AUTO and self.consolidated_mode == ConsolidatedMode.TEMP_HOLD:
+            await self._async_apply_consolidated_mode(ConsolidatedMode.MANUAL)
+            await asyncio.sleep(MODE_SWITCH_DELAY_SECONDS)
+
+        await self._async_apply_consolidated_mode(value)
+        return 0  # Return success
+
+    async def _async_apply_consolidated_mode(self, value: ConsolidatedMode) -> None:
+        """Set the attributes of the consolidated mode that differ from the current ones.
+
         Note: Salus API sometimes has issues with multiple attribute changes.
         We set them one by one to avoid API errors."""
         off_mode, manual_mode, auto_temp_hold_mode = value.value
 
-        # Set attributes one by one instead of all at once
-        # This avoids API 500 errors that occur with multiple simultaneous changes
         if off_mode != self.off_mode:
             await self.async_set_attr(ZoneAttribute.CH_OFF_MODE, off_mode)
 
@@ -139,5 +147,3 @@ class HeatingZone(Zone):
 
         if auto_temp_hold_mode != self.auto_temp_hold_mode:
             await self.async_set_attr(ZoneAttribute.CH_AUTO_TEMP_HOLD_MODE, auto_temp_hold_mode)
-
-        return 0  # Return success
