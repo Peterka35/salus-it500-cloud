@@ -11,7 +11,12 @@
 - A write that does not match the mode the thermostat is in comes back HTTP 200 and changes
   nothing, so every write is read back and a program that did not land raises instead of
   reporting success.
-- The blocks posted follow `CH1schedType`: all days, 5/2, or one per day.
+- The blocks posted follow `CH1schedType`: all days, 5/2, or one per day. A thermostat that does
+  not report its mode is refused rather than assumed to be in all-days mode - posting the wrong
+  block is the HTTP 200 that changes nothing.
+- `set_schedule` takes a full six-step day. The portal keeps steps that are not overwritten and
+  offers no observed way to clear one, so a shorter program would leave the old tail behind and
+  fail its own read-back.
 - Only the first heating zone is covered; the portal's second-zone and hot-water blocks were
   never observed and are not written blind.
 

@@ -74,7 +74,9 @@ SLOT_SCHEMA = vol.Schema(
         vol.Required("temperature"): vol.All(vol.Coerce(float), vol.Range(min=5, max=35)),
     }
 )
-SET_SCHEDULE_SCHEMA = {vol.Required(ATTR_SLOTS): vol.All(cv.ensure_list, vol.Length(min=1, max=6), [SLOT_SCHEMA])}
+# The portal keeps steps that are not overwritten and offers no way to clear one, so only a full
+# six-step program can be written and verified
+SET_SCHEDULE_SCHEMA = {vol.Required(ATTR_SLOTS): vol.All(cv.ensure_list, vol.Length(min=6, max=6), [SLOT_SCHEMA])}
 
 
 async def async_setup_entry(

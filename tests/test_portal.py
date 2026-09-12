@@ -52,7 +52,8 @@ def values(slots: tuple[Slot, ...] = PLAN, sched_type: str = "0", **changes: Any
             block[f"z1p{day}{index}Temp"] = f"{slot.temperature} °C" if slot else "?"
         payload[f"z1p{day}"] = block
     payload.update(changes)
-    return FakeResponse(200, text=json.dumps(payload))
+    # A change of None means the portal did not send that field at all
+    return FakeResponse(200, text=json.dumps({k: v for k, v in payload.items() if v is not None}))
 
 
 def portal(session: FakeSession) -> SalusPortal:
@@ -309,3 +310,26 @@ async def test_an_unreachable_portal_does_not_leak_the_request(caplog: pytest.Lo
         await portal(session).async_read()
 
     assert fixtures.PASSWORD not in str(error.value)
+
+
+async def test_a_program_shorter_than_the_day_is_refused_before_writing() -> None:
+    """The portal keeps the steps not overwritten, so a short program could never verify."""
+
+    session = FakeSession()
+    _ready(session)
+
+    with pytest.raises(PortalError, match="full program"):
+        await portal(session).async_write(OTHER)
+
+    assert session.endpoint_calls("program.php") == []
+
+
+async def test_a_thermostat_not_reporting_its_mode_is_not_assumed_to_be_all_days() -> None:
+    """Posting the all-days block to a device in 5/2 mode changes nothing and reports success."""
+
+    session = FakeSession()
+    _ready(session, values(CH1schedType=None))
+
+    schedule = await portal(session).async_read()
+
+    assert (schedule.schedule_type, schedule.writable) == ("", False)

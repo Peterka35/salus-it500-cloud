@@ -82,7 +82,7 @@
       "fields": {
         "slots": {
           "name": "Steps",
-          "description": "One to six steps, each a time and a temperature."
+          "description": "Six steps, each a time and a temperature. The portal keeps steps that are not overwritten, so a full day must be given."
         }
       }
     }

@@ -82,7 +82,7 @@
       "fields": {
         "slots": {
           "name": "Kroky",
-          "description": "Jeden až šest kroků, každý je čas a teplota."
+          "description": "Šest kroků, každý je čas a teplota. Portál si nepřepsané kroky nechá, takže se musí zadat celý den."
         }
       }
     }

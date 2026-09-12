@@ -226,7 +226,9 @@ class SalusPortal:
                 if moment is not None and temperature is not None:
                     slots.append(Slot(moment, temperature))
             days[day.lower()] = tuple(slots)
-        schedule_type = SCHEDULE_TYPES.get(str(values.get("CH1schedType", "0")), "")
+        # Not defaulted to "all days": posting the all-days block to a device in 5/2 mode is the
+        # HTTP-200 no-op that changes nothing, and refusing beats a best-effort write
+        schedule_type = SCHEDULE_TYPES.get(str(values.get("CH1schedType", "")), "")
         return PortalSchedule(device_id, schedule_type, days)
 
     async def async_write(self, slots: Sequence[Slot]) -> PortalSchedule:
@@ -236,8 +238,11 @@ class SalusPortal:
         changes nothing, so reading the program back is the only way to know it landed.
         """
 
-        if not 1 <= len(slots) <= SLOTS_PER_DAY:
-            raise PortalError(f"A weekly program needs 1 to {SLOTS_PER_DAY} steps, got {len(slots)}")
+        if len(slots) != SLOTS_PER_DAY:
+            # The portal keeps whatever steps are not overwritten, and there is no observed way to
+            # clear one, so a shorter program would leave the old tail behind and never verify.
+            # Refusing up front beats failing after the write with a confusing mismatch.
+            raise PortalError(f"The portal only takes a full program of {SLOTS_PER_DAY} steps, got {len(slots)}")
         device_id, token = await self._async_prepare()
         current = self._schedule(device_id, await self._async_values(device_id, token))
         blocks = WRITE_BLOCKS.get(current.schedule_type)
