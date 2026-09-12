@@ -37,8 +37,11 @@ USER_AGENT = (
 )
 READ_TIMEOUT = 60
 WRITE_TIMEOUT = 90
-# The portal applies a write asynchronously; the reference run needed about this long before it read back
+# The portal applies a write asynchronously, so the program is read back until it matches rather
+# than once after a fixed wait. An iT600 thermostat was seen taking 25 s to report a write it had
+# applied, and reporting that success as a failure invites an operator to write it all over again.
 SETTLE_SECONDS = 6
+CONFIRM_ATTEMPTS = 10
 # A device set to 5/2 or to single days needs its blocks written separately, with a pause between
 BLOCK_PAUSE_SECONDS = 2
 SLOTS_PER_DAY = 6
@@ -254,13 +257,18 @@ class SalusPortal:
                 await self._sleep(BLOCK_PAUSE_SECONDS)
             await self._async_write_block(device_id, token, block, slots)
 
-        await self._sleep(SETTLE_SECONDS)
-        written = self._schedule(device_id, await self._async_values(device_id, token))
         expected = tuple(slots)
-        differing = [day for day, actual in written.days.items() if actual != expected]
-        if differing:
-            raise PortalError(f"Salus portal accepted the program but {', '.join(differing)} did not change")
-        return written
+        differing: list[str] = []
+        for _ in range(CONFIRM_ATTEMPTS):
+            await self._sleep(SETTLE_SECONDS)
+            written = self._schedule(device_id, await self._async_values(device_id, token))
+            differing = [day for day, actual in written.days.items() if actual != expected]
+            if not differing:
+                return written
+        waited = CONFIRM_ATTEMPTS * SETTLE_SECONDS
+        raise PortalError(
+            f"Salus portal accepted the program but {', '.join(differing)} did not change within {waited} s"
+        )
 
     async def _async_write_block(self, device_id: str, token: str, block: str, slots: Sequence[Slot]) -> None:
         body: dict[str, Any] = {"token": token, "tempUnit": "0", "devId": device_id, f"{block}set": "1"}

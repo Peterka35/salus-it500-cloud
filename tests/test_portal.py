@@ -333,3 +333,24 @@ async def test_a_thermostat_not_reporting_its_mode_is_not_assumed_to_be_all_days
     schedule = await portal(session).async_read()
 
     assert (schedule.schedule_type, schedule.writable) == ("", False)
+
+
+async def test_a_portal_that_applies_the_program_slowly_is_still_a_success() -> None:
+    """Reading back once has to guess the slowest device; polling does not."""
+
+    session = FakeSession()
+    _ready(session, values(OTHER), values(OTHER), values(PLAN))
+
+    schedule = await portal(session).async_write(PLAN)
+
+    assert schedule.days["mon"] == PLAN
+    # one read before the write, then two polls
+    assert len(session.endpoint_calls("ajax_device_values.php")) == 3
+
+
+async def test_a_program_that_never_lands_says_how_long_it_waited() -> None:
+    session = FakeSession()
+    _ready(session, values(OTHER))
+
+    with pytest.raises(PortalError, match="did not change within"):
+        await portal(session).async_write(PLAN)

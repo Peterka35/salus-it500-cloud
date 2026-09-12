@@ -10,7 +10,9 @@
 ### Notes
 - A write that does not match the mode the thermostat is in comes back HTTP 200 and changes
   nothing, so every write is read back and a program that did not land raises instead of
-  reporting success.
+  reporting success. The read-back polls until the program matches, up to 60 s, rather than
+  reading once after a fixed wait: a sibling thermostat was seen taking 25 s to report a write it
+  had applied, and calling that a failure invites writing the same program a second time.
 - The blocks posted follow `CH1schedType`: all days, 5/2, or one per day. A thermostat that does
   not report its mode is refused rather than assumed to be in all-days mode - posting the wrong
   block is the HTTP 200 that changes nothing.
