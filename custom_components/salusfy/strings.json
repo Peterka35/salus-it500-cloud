@@ -82,7 +82,7 @@
       "fields": {
         "slots": {
           "name": "Steps",
-          "description": "Six steps, each a time and a temperature. The portal keeps steps that are not overwritten, so a full day must be given."
+          "description": "One to six steps, each a time and a temperature. An iT500 reached through the web portal needs all six: it keeps steps that are not overwritten."
         }
       }
     }

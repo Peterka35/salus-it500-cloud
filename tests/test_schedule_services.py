@@ -133,3 +133,14 @@ async def test_a_missing_portal_is_reported_rather_than_crashing() -> None:
         await thermostat.async_get_schedule()
 
     assert error.value.translation_key == "schedule_unavailable"
+
+
+async def test_a_short_program_is_refused_as_an_error_not_a_schema_rejection() -> None:
+    """A caller must get a HomeAssistantError it can catch, not a raw voluptuous failure."""
+
+    thermostat = await _thermostat()
+
+    with pytest.raises(HomeAssistantError) as error:
+        await thermostat.async_set_schedule(SLOTS)
+
+    assert error.value.translation_key == "command_failed"

@@ -82,7 +82,7 @@
       "fields": {
         "slots": {
           "name": "Kroky",
-          "description": "Šest kroků, každý je čas a teplota. Portál si nepřepsané kroky nechá, takže se musí zadat celý den."
+          "description": "Jeden až šest kroků, každý je čas a teplota. iT500 přes webový portál potřebuje všech šest: nepřepsané kroky si nechá."
         }
       }
     }
