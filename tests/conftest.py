@@ -1,6 +1,19 @@
 """Shared test configuration."""
 
+from unittest.mock import MagicMock
+
 import pytest
+
+
+@pytest.fixture(autouse=True)
+def entity_platform(monkeypatch: pytest.MonkeyPatch) -> MagicMock:
+    """Stand in for the platform context Home Assistant provides while setting a platform up."""
+
+    platform = MagicMock()
+    monkeypatch.setattr(
+        "custom_components.salusfy.climate.entity_platform.async_get_current_platform", lambda: platform
+    )
+    return platform
 
 
 @pytest.fixture(autouse=True)

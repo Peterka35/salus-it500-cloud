@@ -5,9 +5,10 @@ from __future__ import annotations
 from homeassistant.const import CONF_PASSWORD, CONF_USERNAME, Platform
 from homeassistant.core import HomeAssistant
 from homeassistant.exceptions import ConfigEntryAuthFailed, ConfigEntryNotReady
-from homeassistant.helpers.aiohttp_client import async_get_clientsession
+from homeassistant.helpers.aiohttp_client import async_create_clientsession, async_get_clientsession
 
 from .coordinator import SalusConfigEntry, SalusDataCoordinator
+from .portal import SalusPortal
 from .pyit500.auth import Auth
 from .pyit500.device import Device
 from .pyit500.exceptions import InvalidAuth, SalusError
@@ -30,8 +31,13 @@ async def async_setup_entry(hass: HomeAssistant, entry: SalusConfigEntry) -> boo
     if not device_list:
         raise ConfigEntryNotReady("No Salus iT500 device found on the account")
 
+    # The portal signs in with a cookie and on a different host, so it needs a session of its own
+    portal_session = async_create_clientsession(hass)
+    entry.async_on_unload(portal_session.close)
+    portal = SalusPortal(portal_session, entry.data[CONF_USERNAME], entry.data[CONF_PASSWORD])
+
     # Use the first device (most users have only one thermostat)
-    coordinator = SalusDataCoordinator(hass, entry, Device(device_list[0].device_id, None, auth))
+    coordinator = SalusDataCoordinator(hass, entry, Device(device_list[0].device_id, None, auth), portal=portal)
     await coordinator.async_config_entry_first_refresh()
     entry.runtime_data = coordinator
 
