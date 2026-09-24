@@ -31,11 +31,16 @@ DEVICE_ATTRIBUTES = {
 }
 
 
-def device_attributes_xml(attributes: dict[str, str]) -> str:
-    """Return getDeviceAttributesWithValues response."""
+def device_attributes_xml(attributes: dict[str, str], reported_at: float | None = None) -> str:
+    """Return getDeviceAttributesWithValues response.
 
+    `reported_at` is when the gateway last uploaded the values, in epoch seconds; the API gives it
+    per attribute as `updTime` in milliseconds. Left out, the attributes carry no time at all.
+    """
+
+    upd_time = "" if reported_at is None else f"<updTime>{int(reported_at * 1000)}</updTime>"
     items = "".join(
-        f"<attrList><id>{index}</id><name>{name}</name><value>{value}</value><updateTime>1789140000</updateTime></attrList>"
+        f"<attrList><id>{index}</id><name>{name}</name><value>{value}</value>{upd_time}</attrList>"
         for index, (name, value) in enumerate(attributes.items())
     )
     return (

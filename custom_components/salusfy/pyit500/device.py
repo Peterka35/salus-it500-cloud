@@ -222,6 +222,19 @@ class Device:
             if now < expiry and (raw_data.get("attrList:" + name) or {}).get("value") != value
         }
 
+    @property
+    def reported_at(self) -> float | None:
+        """When the device last uploaded its values, in epoch seconds, or None if the API did not say.
+
+        The API stamps every attribute with `updTime` in milliseconds; the newest one is the last
+        time the gateway was heard from."""
+        times = [
+            int(item["updTime"])
+            for key, item in (self.raw_data or {}).items()
+            if key.startswith("attrList:") and isinstance(item, dict) and str(item.get("updTime", "")).isdigit()
+        ]
+        return max(times) / 1000 if times else None
+
     @staticmethod
     def xml_postprocessor(_path, key, value) -> tuple:
         """Called by xmltodict. Extracts the configurations and attrList key/value pairs."""

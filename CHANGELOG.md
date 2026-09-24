@@ -1,5 +1,18 @@
 # Changelog
 
+## 1.3.0
+
+### Fixed
+- A thermostat that goes offline no longer looks healthy. The API keeps answering for it with the
+  values it uploaded last, so its entities showed a frozen temperature and accepted commands that
+  then failed; one thermostat stayed like that for six days. The gateway uploads every attribute again
+  every few minutes, so entities now become unavailable when the newest upload (`updTime`) is more
+  than 30 minutes old, and a warning is logged once when that happens.
+
+### Notes
+- `presenceInfo` and the `online` attribute do not say whether a thermostat is online: both read
+  0 on thermostats that were uploading normally.
+
 ## 1.2.0
 
 ### Added

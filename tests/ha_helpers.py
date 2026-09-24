@@ -26,15 +26,17 @@ def create_entry() -> MagicMock:
 
 
 async def create_coordinator(
-    session: FakeSession, **attribute_changes: Any
+    session: FakeSession, *, reported_at: float | None = None, now: float = 0.0, **attribute_changes: Any
 ) -> tuple[SalusDataCoordinator, list[float]]:
-    """Return coordinator after its first update and the clock shared with its device."""
+    """Return coordinator after its first update and the clock shared with its device.
+
+    `now` is the wall clock the coordinator compares the device's `reported_at` with."""
 
     clock = [0.0]
-    device = await create_device(session, clock=lambda: clock[0], **attribute_changes)
+    device = await create_device(session, clock=lambda: clock[0], reported_at=reported_at, **attribute_changes)
     hass = MagicMock()
     hass.loop = asyncio.get_running_loop()
-    coordinator = SalusDataCoordinator(hass, create_entry(), device, clock=lambda: clock[0])
+    coordinator = SalusDataCoordinator(hass, create_entry(), device, clock=lambda: clock[0], wall_clock=lambda: now)
     coordinator.data = await coordinator._async_update_data()
     return coordinator, clock
 

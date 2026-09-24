@@ -102,3 +102,48 @@ async def test_shutdown_cancels_confirmation_refreshes() -> None:
     await coordinator.async_shutdown()
 
     assert call_later.return_value.call_count == 2
+
+
+# The gateway uploads every attribute again every few minutes even when nothing changed, so the newest
+# upload time is a heartbeat. An offline thermostat keeps answering with the values it last had.
+NOW = 1_790_240_000.0
+
+
+async def test_device_that_reported_recently_is_online() -> None:
+    """Values uploaded a few minutes ago come from a thermostat that is online."""
+
+    coordinator, _ = await create_coordinator(FakeSession(), reported_at=NOW - 6 * 60, now=NOW)
+
+    assert not coordinator.device_offline
+
+
+async def test_device_silent_for_half_an_hour_is_offline() -> None:
+    """Values last uploaded long ago are the last thing an offline thermostat said, not its state."""
+
+    coordinator, _ = await create_coordinator(FakeSession(), reported_at=NOW - 31 * 60, now=NOW)
+
+    assert coordinator.device_offline
+
+
+async def test_device_without_upload_times_is_not_called_offline() -> None:
+    """Without upload times there is no evidence either way, so the entities stay as they were."""
+
+    coordinator, _ = await create_coordinator(FakeSession(), now=NOW)
+
+    assert not coordinator.device_offline
+
+
+async def test_entities_of_an_offline_device_are_unavailable() -> None:
+    """An offline thermostat must not look controllable: its values are days old and commands fail."""
+
+    from custom_components.salusfy.climate import SalusThermostat
+    from custom_components.salusfy.pyit500.zone import Prefix
+    from custom_components.salusfy.water_heater import SalusWaterHeater
+
+    online, _ = await create_coordinator(FakeSession(), reported_at=NOW - 60, now=NOW)
+    offline, _ = await create_coordinator(FakeSession(), reported_at=NOW - 6 * 24 * 3600, now=NOW)
+
+    assert SalusThermostat(online, Prefix.CH1).available
+    assert SalusWaterHeater(online).available
+    assert not SalusThermostat(offline, Prefix.CH1).available
+    assert not SalusWaterHeater(offline).available
