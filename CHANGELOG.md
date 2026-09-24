@@ -1,5 +1,40 @@
 # Changelog
 
+## 1.3.0
+
+### Fixed
+- A thermostat that goes offline no longer looks healthy. The API keeps answering for it with the
+  values it uploaded last, so its entities showed a frozen temperature and accepted commands that
+  then failed; one thermostat stayed like that for six days. The gateway uploads every attribute again
+  every few minutes, so entities now become unavailable when the newest upload (`updTime`) is more
+  than 30 minutes old, and a warning is logged once when that happens.
+
+### Notes
+- `presenceInfo` and the `online` attribute do not say whether a thermostat is online: both read
+  0 on thermostats that were uploading normally.
+
+## 1.2.0
+
+### Added
+- Weekly heating programs, read and written through the salus-it500.com web portal with the
+  credentials the config entry already holds: services `salusfy.get_schedule` (returns the program
+  of every day) and `salusfy.set_schedule` (writes one daily program to the whole week).
+
+### Notes
+- A write that does not match the mode the thermostat is in comes back HTTP 200 and changes
+  nothing, so every write is read back and a program that did not land raises instead of
+  reporting success. The read-back polls until the program matches, up to 60 s, rather than
+  reading once after a fixed wait: a sibling thermostat was seen taking 25 s to report a write it
+  had applied, and calling that a failure invites writing the same program a second time.
+- The blocks posted follow `CH1schedType`: all days, 5/2, or one per day. A thermostat that does
+  not report its mode is refused rather than assumed to be in all-days mode - posting the wrong
+  block is the HTTP 200 that changes nothing.
+- `set_schedule` accepts one to six steps, but the portal keeps steps it does not overwrite and
+  offers no observed way to clear one, so anything short of a full day is refused by the portal
+  client with a clear reason rather than failing its own read-back afterwards.
+- Only the first heating zone is covered; the portal's second-zone and hot-water blocks were
+  never observed and are not written blind.
+
 ## [1.1.0] - 2026-09-11
 
 ### ⚡ Rychlejší a spolehlivější ovládání

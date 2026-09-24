@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from typing import Any
 
+import voluptuous as vol
 from homeassistant.components.climate import (
     ClimateEntity,
     ClimateEntityFeature,
@@ -11,11 +12,16 @@ from homeassistant.components.climate import (
     HVACMode,
 )
 from homeassistant.const import ATTR_TEMPERATURE, UnitOfTemperature
-from homeassistant.core import HomeAssistant
+from homeassistant.core import HomeAssistant, ServiceResponse, SupportsResponse
+from homeassistant.exceptions import HomeAssistantError
+from homeassistant.helpers import config_validation as cv
+from homeassistant.helpers import entity_platform
 from homeassistant.helpers.entity_platform import AddConfigEntryEntitiesCallback
 
+from .const import DOMAIN
 from .coordinator import SalusConfigEntry, SalusDataCoordinator
 from .entity import SalusEntity
+from .portal import PortalSchedule, SalusPortal, Slot
 from .pyit500.device import SystemType, TemperatureUnit
 from .pyit500.heatingzone import ConsolidatedMode, HeatingZone
 from .pyit500.zone import OnOffStatus, Prefix
@@ -58,6 +64,22 @@ ZONE_NAMES = {
 }
 
 
+SERVICE_GET_SCHEDULE = "get_schedule"
+SERVICE_SET_SCHEDULE = "set_schedule"
+ATTR_SLOTS = "slots"
+
+SLOT_SCHEMA = vol.Schema(
+    {
+        vol.Required("time"): cv.time,
+        vol.Required("temperature"): vol.All(vol.Coerce(float), vol.Range(min=5, max=35)),
+    }
+)
+# One to six, matching every other slot-count contract in this system. The portal's own limit - it
+# keeps steps it does not overwrite, so only a full day can be verified - is enforced in portal.py,
+# where it belongs, and arrives as a HomeAssistantError rather than a schema rejection.
+SET_SCHEDULE_SCHEMA = {vol.Required(ATTR_SLOTS): vol.All(cv.ensure_list, vol.Length(min=1, max=6), [SLOT_SCHEMA])}
+
+
 async def async_setup_entry(
     hass: HomeAssistant,
     entry: SalusConfigEntry,
@@ -74,6 +96,12 @@ async def async_setup_entry(
         entities.append(SalusThermostat(coordinator, Prefix.CH2))
 
     async_add_entities(entities)
+
+    platform = entity_platform.async_get_current_platform()
+    platform.async_register_entity_service(
+        SERVICE_GET_SCHEDULE, None, "async_get_schedule", supports_response=SupportsResponse.ONLY
+    )
+    platform.async_register_entity_service(SERVICE_SET_SCHEDULE, SET_SCHEDULE_SCHEMA, "async_set_schedule")
 
 
 class SalusThermostat(SalusEntity, ClimateEntity):
@@ -188,3 +216,44 @@ class SalusThermostat(SalusEntity, ClimateEntity):
             "frost_active": self._zone.frost_active.friendly_name,
             "schedule_type": self._zone.schedule_type.friendly_name,
         }
+
+    # Weekly program -------------------------------------------------------
+
+    def _require_portal(self) -> SalusPortal:
+        """Return the portal client, refusing zones whose program cannot be reached.
+
+        Only the first heating zone is covered: the portal's second-zone and hot-water blocks were
+        never observed, and writing an unverified block shape into an occupied apartment is not a
+        guess worth making.
+        """
+
+        if self._zone_prefix != Prefix.CH1:
+            raise HomeAssistantError(translation_domain=DOMAIN, translation_key="schedule_zone_unsupported")
+        if self.coordinator.portal is None:
+            raise HomeAssistantError(translation_domain=DOMAIN, translation_key="schedule_unavailable")
+        return self.coordinator.portal
+
+    async def async_get_schedule(self) -> ServiceResponse:
+        """Return the weekly program the thermostat is running."""
+
+        schedule = await self.coordinator.async_run(self._require_portal().async_read)
+        return _response(schedule)
+
+    async def async_set_schedule(self, slots: list[dict[str, Any]]) -> None:
+        """Write one daily program to the whole week and confirm the thermostat took it."""
+
+        portal = self._require_portal()
+        program = [Slot(str(slot["time"])[:5], float(slot["temperature"])) for slot in slots]
+        await self.coordinator.async_run(lambda: portal.async_write(program))
+
+
+def _response(schedule: PortalSchedule) -> ServiceResponse:
+    return {
+        "device_id": schedule.device_id,
+        "schedule_type": schedule.schedule_type,
+        "writable": schedule.writable,
+        "days": {
+            day: [{"time": slot.time, "temperature": slot.temperature} for slot in slots]
+            for day, slots in schedule.days.items()
+        },
+    }

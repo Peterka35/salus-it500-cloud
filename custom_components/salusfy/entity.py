@@ -22,3 +22,8 @@ class SalusEntity(CoordinatorEntity[SalusDataCoordinator]):
             model="iT500",
             name=device.description or "Salus iT500",
         )
+
+    @property
+    def available(self) -> bool:
+        """Unavailable while the thermostat is offline: the API keeps serving its last values."""
+        return super().available and not self.coordinator.device_offline

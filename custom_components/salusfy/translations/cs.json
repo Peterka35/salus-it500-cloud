@@ -61,8 +61,30 @@
     "invalid_auth": {
       "message": "Salus odmítl přihlašovací údaje, přihlaste integraci znovu"
     },
+    "schedule_zone_unsupported": {
+      "message": "Týdenní program této zóny není dostupný; podporovaná je jen první topná zóna."
+    },
+    "schedule_unavailable": {
+      "message": "Webový portál Salus není nastavený, týdenní program se nedá načíst."
+    },
     "command_failed": {
       "message": "Příkaz pro Salus iT500 selhal: {error}"
+    }
+  },
+  "services": {
+    "get_schedule": {
+      "name": "Načíst týdenní program",
+      "description": "Vrátí týdenní program topení, podle kterého termostat jede."
+    },
+    "set_schedule": {
+      "name": "Zapsat týdenní program",
+      "description": "Zapíše jeden denní program do všech dnů v týdnu a ověří, že ho termostat přijal.",
+      "fields": {
+        "slots": {
+          "name": "Kroky",
+          "description": "Jeden až šest kroků, každý je čas a teplota. iT500 přes webový portál potřebuje všech šest: nepřepsané kroky si nechá."
+        }
+      }
     }
   }
 }

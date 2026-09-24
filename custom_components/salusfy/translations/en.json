@@ -61,8 +61,30 @@
     "invalid_auth": {
       "message": "Salus rejected the credentials, re-authenticate the integration"
     },
+    "schedule_zone_unsupported": {
+      "message": "The weekly program of this zone cannot be reached; only the first heating zone is supported."
+    },
+    "schedule_unavailable": {
+      "message": "The Salus web portal is not set up, so the weekly program cannot be read."
+    },
     "command_failed": {
       "message": "Salus iT500 command failed: {error}"
+    }
+  },
+  "services": {
+    "get_schedule": {
+      "name": "Read weekly program",
+      "description": "Returns the weekly heating program the thermostat is running."
+    },
+    "set_schedule": {
+      "name": "Write weekly program",
+      "description": "Writes one daily program to every day of the week and confirms the thermostat took it.",
+      "fields": {
+        "slots": {
+          "name": "Steps",
+          "description": "One to six steps, each a time and a temperature. An iT500 reached through the web portal needs all six: it keeps steps that are not overwritten."
+        }
+      }
     }
   }
 }
