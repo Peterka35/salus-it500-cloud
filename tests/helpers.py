@@ -59,9 +59,9 @@ def login_response(token: str = fixtures.SECURITY_TOKEN) -> FakeResponse:
     return FakeResponse(200, text=json.dumps({"userId": fixtures.USER_ID, "securityToken": token}))
 
 
-def attributes_response(reported_at: float | None = None, **changes: str) -> FakeResponse:
+def attributes_response(reported_at: float | None = None, presence: str | None = None, **changes: str) -> FakeResponse:
     return FakeResponse(
-        200, text=fixtures.device_attributes_xml({**fixtures.DEVICE_ATTRIBUTES, **changes}, reported_at)
+        200, text=fixtures.device_attributes_xml({**fixtures.DEVICE_ATTRIBUTES, **changes}, reported_at, presence)
     )
 
 
@@ -78,11 +78,12 @@ async def create_device(
     session: FakeSession,
     clock: Callable[[], float] = lambda: 0.0,
     reported_at: float | None = None,
+    presence: str | None = None,
     **attribute_changes: str,
 ) -> Device:
     """Return logged in device loaded from the fake API."""
 
-    session.add("getDeviceAttributesWithValues", attributes_response(reported_at, **attribute_changes))
+    session.add("getDeviceAttributesWithValues", attributes_response(reported_at, presence, **attribute_changes))
     session.add("setMultiDeviceAttributes2", FakeResponse(200, text=fixtures.set_attributes_xml(0)))
     device = Device(fixtures.DEVICE_ID, None, await create_auth(session), clock=clock)
     await device.async_update()

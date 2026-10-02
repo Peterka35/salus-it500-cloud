@@ -70,9 +70,12 @@ class SalusDataCoordinator(DataUpdateCoordinator[Device]):
 
     @property
     def device_offline(self) -> bool:
-        """Whether the thermostat itself has gone quiet, although the API still answers for it."""
+        """Whether the thermostat itself has gone quiet, although the API still answers for it.
+
+        Silence alone is not an outage: a steady thermostat uploads nothing for hours. It takes the
+        cloud losing the gateway, and the values being old enough not to contradict that."""
         reported_at = self.device.reported_at
-        if reported_at is None:
+        if reported_at is None or self.device.connected is not False:
             return False
         return self._wall_clock() - reported_at > DEVICE_OFFLINE_AFTER.total_seconds()
 

@@ -31,11 +31,15 @@ DEVICE_ATTRIBUTES = {
 }
 
 
-def device_attributes_xml(attributes: dict[str, str], reported_at: float | None = None) -> str:
+def device_attributes_xml(
+    attributes: dict[str, str], reported_at: float | None = None, presence: str | None = None
+) -> str:
     """Return getDeviceAttributesWithValues response.
 
     `reported_at` is when the gateway last uploaded the values, in epoch seconds; the API gives it
     per attribute as `updTime` in milliseconds. Left out, the attributes carry no time at all.
+    `presence` is the cloud's `presenceInfo` for the gateway, "1" connected and "0" not; left out,
+    the response has none.
     """
 
     upd_time = "" if reported_at is None else f"<updTime>{int(reported_at * 1000)}</updTime>"
@@ -46,7 +50,9 @@ def device_attributes_xml(attributes: dict[str, str], reported_at: float | None 
     return (
         '<?xml version="1.0" encoding="UTF-8"?>'
         '<ns1:getDeviceAttributesWithValuesResponse xmlns:ns1="http://arrayent.com/zamapi">'
-        f"<totalAttrCount>{len(attributes)}</totalAttrCount>{items}"
+        f"<totalAttrCount>{len(attributes)}</totalAttrCount>"
+        + ("" if presence is None else f"<presenceInfo>{presence}</presenceInfo>")
+        + f"{items}"
         "</ns1:getDeviceAttributesWithValuesResponse>"
     )
 

@@ -1,5 +1,19 @@
 # Changelog
 
+## 1.3.1
+
+### Fixed
+- Thermostats that work no longer turn unavailable dozens of times a day. The gateway uploads an
+  attribute only when it changes, not every few minutes as 1.3.0 assumed, so a zone held steady
+  (one zone at 15 °C went fourteen hours without an upload) counted as offline; the six thermostats went
+  unavailable 350 times in the week after 1.3.0. A thermostat is now offline only when the cloud
+  reports its gateway disconnected (`presenceInfo` 0) and its values are more than 30 minutes old.
+
+### Notes
+- `presenceInfo` is used together with the upload time because it read 0 on gateways uploading
+  normally on 2026-09-24; since 2026-09-25 it has matched the estate (a gateway disconnected
+  since 2026-09-26 reads 0, the other five read 1).
+
 ## 1.3.0
 
 ### Fixed
@@ -11,7 +25,7 @@
 
 ### Notes
 - `presenceInfo` and the `online` attribute do not say whether a thermostat is online: both read
-  0 on thermostats that were uploading normally.
+  0 on thermostats that were uploading normally. (Corrected in 1.3.1.)
 
 ## 1.2.0
 

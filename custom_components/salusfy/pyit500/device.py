@@ -226,14 +226,20 @@ class Device:
     def reported_at(self) -> float | None:
         """When the device last uploaded its values, in epoch seconds, or None if the API did not say.
 
-        The API stamps every attribute with `updTime` in milliseconds; the newest one is the last
-        time the gateway was heard from."""
+        The API stamps every attribute with `updTime` in milliseconds when the gateway uploads it, and
+        the gateway uploads an attribute only when it changes."""
         times = [
             int(item["updTime"])
             for key, item in (self.raw_data or {}).items()
             if key.startswith("attrList:") and isinstance(item, dict) and str(item.get("updTime", "")).isdigit()
         ]
         return max(times) / 1000 if times else None
+
+    @property
+    def connected(self) -> bool | None:
+        """Whether the cloud says the gateway is connected (`presenceInfo`), or None if it did not say."""
+        presence = str((self.raw_data or {}).get("presenceInfo", ""))
+        return {"1": True, "0": False}.get(presence)
 
     @staticmethod
     def xml_postprocessor(_path, key, value) -> tuple:
