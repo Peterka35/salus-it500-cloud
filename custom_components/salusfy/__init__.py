@@ -4,9 +4,10 @@ from __future__ import annotations
 
 from homeassistant.const import CONF_PASSWORD, CONF_USERNAME, Platform
 from homeassistant.core import HomeAssistant
-from homeassistant.exceptions import ConfigEntryAuthFailed, ConfigEntryNotReady
+from homeassistant.exceptions import ConfigEntryAuthFailed, ConfigEntryError, ConfigEntryNotReady
 from homeassistant.helpers.aiohttp_client import async_create_clientsession, async_get_clientsession
 
+from .const import CONF_DEVICE_ID
 from .coordinator import SalusConfigEntry, SalusDataCoordinator
 from .portal import SalusPortal
 from .pyit500.auth import Auth
@@ -31,13 +32,23 @@ async def async_setup_entry(hass: HomeAssistant, entry: SalusConfigEntry) -> boo
     if not device_list:
         raise ConfigEntryNotReady("No Salus iT500 device found on the account")
 
+    device_id = entry.data.get(CONF_DEVICE_ID)
+    if device_id is None:
+        # Entries made before 1.4.0 always showed the first thermostat of the account
+        device_id = str(device_list[0].device_id)
+        hass.config_entries.async_update_entry(
+            entry, data={**entry.data, CONF_DEVICE_ID: device_id}, unique_id=device_id
+        )
+    item = next((item for item in device_list if str(item.device_id) == device_id), None)
+    if item is None:
+        raise ConfigEntryError(f"Salus iT500 thermostat {device_id} is no longer on the account")
+
     # The portal signs in with a cookie and on a different host, so it needs a session of its own
     portal_session = async_create_clientsession(hass)
     entry.async_on_unload(portal_session.close)
-    portal = SalusPortal(portal_session, entry.data[CONF_USERNAME], entry.data[CONF_PASSWORD])
+    portal = SalusPortal(portal_session, entry.data[CONF_USERNAME], entry.data[CONF_PASSWORD], device_id=device_id)
 
-    # Use the first device (most users have only one thermostat)
-    coordinator = SalusDataCoordinator(hass, entry, Device(device_list[0].device_id, None, auth), portal=portal)
+    coordinator = SalusDataCoordinator(hass, entry, Device(item.device_id, None, auth), portal=portal)
     await coordinator.async_config_entry_first_refresh()
     entry.runtime_data = coordinator
 

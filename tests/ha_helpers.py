@@ -7,6 +7,7 @@ from unittest.mock import MagicMock
 from homeassistant.config_entries import ConfigEntryState
 from homeassistant.const import CONF_PASSWORD, CONF_USERNAME
 
+from custom_components.salusfy.const import CONF_DEVICE_ID
 from custom_components.salusfy.coordinator import SalusDataCoordinator
 
 from . import fixtures
@@ -15,12 +16,14 @@ from .helpers import FakeSession, create_device
 CALL_LATER = "custom_components.salusfy.coordinator.async_call_later"
 
 
-def create_entry() -> MagicMock:
-    """Return config entry being set up."""
+def create_entry(device_id: str | None = None) -> MagicMock:
+    """Return config entry being set up; without `device_id` it is an entry made before 1.4.0."""
 
     entry = MagicMock()
     entry.entry_id = "salusfy-entry"
     entry.data = {CONF_USERNAME: fixtures.USERNAME, CONF_PASSWORD: fixtures.PASSWORD}
+    if device_id is not None:
+        entry.data[CONF_DEVICE_ID] = device_id
     entry.state = ConfigEntryState.SETUP_IN_PROGRESS
     return entry
 

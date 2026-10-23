@@ -56,11 +56,11 @@ def values(slots: tuple[Slot, ...] = PLAN, sched_type: str = "0", **changes: Any
     return FakeResponse(200, text=json.dumps({k: v for k, v in payload.items() if v is not None}))
 
 
-def portal(session: FakeSession) -> SalusPortal:
+def portal(session: FakeSession, device_id: str | None = None) -> SalusPortal:
     async def _no_sleep(_seconds: float) -> None:
         return None
 
-    return SalusPortal(session, fixtures.USERNAME, fixtures.PASSWORD, sleep=_no_sleep)
+    return SalusPortal(session, fixtures.USERNAME, fixtures.PASSWORD, device_id=device_id, sleep=_no_sleep)
 
 
 def _ready(session: FakeSession, *value_responses: FakeResponse) -> None:
@@ -123,6 +123,17 @@ async def test_a_second_thermostat_is_noted_and_the_first_used(caplog: pytest.Lo
 
     assert schedule.device_id == "111"
     assert "2 thermostats" in caplog.text
+
+
+async def test_the_configured_thermostat_is_used_without_the_listing() -> None:
+    session = FakeSession()
+    _ready(session)
+
+    schedule = await portal(session, device_id="201300002").async_read()
+
+    assert schedule.device_id == "201300002"
+    assert session.endpoint_calls("devices.php") == []
+    assert session.endpoint_calls("control.php")[0]["params"] == {"devId": "201300002"}
 
 
 async def test_the_weekly_program_is_read_for_every_day() -> None:

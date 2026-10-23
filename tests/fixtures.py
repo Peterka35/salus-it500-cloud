@@ -3,6 +3,8 @@
 USERNAME = "owner@example.com"
 PASSWORD = "secret!pass"
 DEVICE_ID = 201300001
+# Second thermostat of the same account, a house of its own
+SECOND_DEVICE_ID = 201300002
 USER_ID = 1500001
 SECURITY_TOKEN = "token-1"
 
@@ -68,13 +70,15 @@ def set_attributes_xml(ret_code: int = 0) -> str:
     )
 
 
-def device_list_xml() -> str:
-    """Return getDeviceList response with one device."""
+def device_list_xml(*device_ids: int) -> str:
+    """Return getDeviceList response with the given devices, DEVICE_ID alone by default."""
 
+    items = "".join(
+        f"<devList><devId>{device_id}</devId><devName>Salus iT500</devName><typeId>100</typeId>"
+        f"<sleepMode>0</sleepMode><appID>2</appID><userID>{USER_ID}</userID></devList>"
+        for device_id in device_ids or (DEVICE_ID,)
+    )
     return (
         '<?xml version="1.0" encoding="UTF-8"?>'
-        '<ns1:getDeviceListResponse xmlns:ns1="http://arrayent.com/zamapi">'
-        f"<devList><devId>{DEVICE_ID}</devId><devName>Salus iT500</devName><typeId>100</typeId>"
-        f"<sleepMode>0</sleepMode><appID>2</appID><userID>{USER_ID}</userID></devList>"
-        "</ns1:getDeviceListResponse>"
+        f'<ns1:getDeviceListResponse xmlns:ns1="http://arrayent.com/zamapi">{items}</ns1:getDeviceListResponse>'
     )

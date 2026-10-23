@@ -108,7 +108,7 @@ def parse_time(value: Any) -> str | None:
 
 
 class SalusPortal:
-    """One signed-in portal session for one account, which owns exactly one thermostat."""
+    """One signed-in portal session for one thermostat of an account."""
 
     def __init__(
         self,
@@ -116,12 +116,15 @@ class SalusPortal:
         username: str,
         password: str,
         *,
+        device_id: str | None = None,
         sleep: Callable[[float], Awaitable[None]] = asyncio.sleep,
     ) -> None:
         self._session = session
         self._username = username
         self._password = password
         self._sleep = sleep
+        # The portal knows thermostats by the same devId as the mobile API; without one, the listing decides
+        self._configured_device_id = device_id
         self._device_id: str | None = None
 
     # Requests ------------------------------------------------------------
@@ -157,11 +160,7 @@ class SalusPortal:
             raise InvalidAuth("Salus portal rejected the stored credentials")
 
     async def _async_discover(self) -> str:
-        """Return the account's thermostat.
-
-        The config entry stores only a username and a password, so there is no device id to pass
-        through from the mobile API and the portal's own listing is the only source.
-        """
+        """Return the account's thermostat when none was configured."""
 
         page = await self._async_request("get", "/public/devices.php", timeout=READ_TIMEOUT)
         found = list(dict.fromkeys(DEVICE_PATTERN.findall(page)))
@@ -184,7 +183,7 @@ class SalusPortal:
         for attempt in (1, 2):
             if self._device_id is None:
                 await self._async_login()
-                self._device_id = await self._async_discover()
+                self._device_id = self._configured_device_id or await self._async_discover()
             token = await self._async_token(self._device_id)
             if token is not None:
                 return self._device_id, token

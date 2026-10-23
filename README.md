@@ -45,7 +45,9 @@ Custom integration for Salus iT500 thermostats (RT301i, RT300, RT500 and other d
 2. Search for **Salus iT500**
 3. Enter the e-mail and password of your Salus account
 
-The first thermostat of the account is added. Add each Salus account as a separate entry.
+Each entry controls one thermostat. When the account has several thermostats (for example one per house), the setup asks which one to add; add the integration again for each of the others. Thermostats under separate Salus accounts are added the same way, one entry per account.
+
+Entries made before 1.4.0 keep the first thermostat of their account.
 
 ## Entities
 
