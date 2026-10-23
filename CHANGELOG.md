@@ -1,5 +1,21 @@
 # Changelog
 
+## 1.4.0
+
+### Added
+- Several thermostats under one Salus account (for example one per house). When the account has
+  more than one, the setup asks which thermostat to add; adding the integration again offers the
+  ones that have no entry yet. The weekly program services use the entry's own thermostat.
+
+### Changed
+- An entry is keyed by its thermostat instead of the account. Entries made before 1.4.0 are tied to
+  the first thermostat of their account, the one they have always shown, the next time they are
+  set up; their entities stay as they are.
+
+### Notes
+- Tested with one thermostat per account only; an account with several thermostats is covered by
+  tests against a simulated device list.
+
 ## 1.3.1
 
 ### Fixed

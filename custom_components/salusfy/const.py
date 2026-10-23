@@ -4,6 +4,9 @@ from datetime import timedelta
 
 DOMAIN = "salusfy"
 
+# Thermostat of the account the entry controls; entries made before 1.4.0 lack it until set up again
+CONF_DEVICE_ID = "device_id"
+
 # Update interval for polling
 # Salus API can be slow to update (10-30 seconds)
 # Use 60 seconds to avoid overwhelming the API server

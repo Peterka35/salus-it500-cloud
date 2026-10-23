@@ -9,6 +9,13 @@
           "password": "Heslo"
         }
       },
+      "device": {
+        "title": "Výběr termostatu",
+        "description": "Účet má více termostatů. Vyberte, který přidat; pro každý další přidejte integraci znovu.",
+        "data": {
+          "device_id": "Termostat"
+        }
+      },
       "reauth_confirm": {
         "title": "Nové přihlášení k Salus iT500",
         "description": "Salus odmítl uložené heslo účtu {username}. Zadejte aktuální heslo.",
@@ -24,7 +31,7 @@
       "unknown": "Došlo k neočekávané chybě"
     },
     "abort": {
-      "already_configured": "Účet je již nakonfigurován",
+      "already_configured": "Všechny termostaty tohoto účtu jsou již nakonfigurované",
       "reauth_successful": "Přihlášení bylo obnoveno"
     }
   },

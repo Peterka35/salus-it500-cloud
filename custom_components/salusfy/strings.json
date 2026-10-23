@@ -9,6 +9,13 @@
           "password": "Password"
         }
       },
+      "device": {
+        "title": "Choose a thermostat",
+        "description": "The account has several thermostats. Choose the one to add; add the integration again for each of the others.",
+        "data": {
+          "device_id": "Thermostat"
+        }
+      },
       "reauth_confirm": {
         "title": "Salus iT500 re-authentication",
         "description": "Salus rejected the saved password of account {username}. Enter the current password.",
@@ -24,7 +31,7 @@
       "unknown": "Unexpected error occurred"
     },
     "abort": {
-      "already_configured": "Account is already configured",
+      "already_configured": "Every thermostat of this account is already configured",
       "reauth_successful": "Re-authentication was successful"
     }
   },

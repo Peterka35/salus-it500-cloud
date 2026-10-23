@@ -13,7 +13,7 @@ from homeassistant.const import CONF_PASSWORD, CONF_USERNAME
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.aiohttp_client import async_get_clientsession
 
-from .const import DOMAIN
+from .const import CONF_DEVICE_ID, DOMAIN
 from .pyit500.auth import Auth
 from .pyit500.exceptions import InvalidAuth, SalusError
 from .pyit500.pyit500 import PyIt500
@@ -25,8 +25,11 @@ class NoDevices(Exception):
     """Error to indicate no devices found."""
 
 
-async def validate_input(hass: HomeAssistant, data: Mapping[str, Any]) -> dict[str, Any]:
-    """Validate the user input allows us to connect."""
+async def validate_input(hass: HomeAssistant, data: Mapping[str, Any]) -> dict[str, str]:
+    """Validate the user input allows us to connect and return the account's thermostats.
+
+    Thermostat names are keyed by device id, in the order of the account's device list.
+    """
     auth = Auth(async_get_clientsession(hass), data[CONF_USERNAME], data[CONF_PASSWORD])
     await auth.refresh_token()
 
@@ -35,17 +38,16 @@ async def validate_input(hass: HomeAssistant, data: Mapping[str, Any]) -> dict[s
     if not device_list:
         raise NoDevices
 
-    try:
-        device = await api.async_get_device(device_list[0].device_id)
-        title = device.description or f"Salus iT500 ({device_list[0].name})"
-    except SalusError as err:
-        _LOGGER.warning("Failed to get device details, using fallback title: %s", err)
-        title = f"Salus iT500 ({device_list[0].name})"
-
-    return {
-        "title": title,
-        "device_count": len(device_list),
-    }
+    devices: dict[str, str] = {}
+    for item in device_list:
+        try:
+            device = await api.async_get_device(item.device_id)
+            title = device.description or f"Salus iT500 ({item.name})"
+        except SalusError as err:
+            _LOGGER.warning("Failed to get device details, using fallback title: %s", err)
+            title = f"Salus iT500 ({item.name})"
+        devices[str(item.device_id)] = title
+    return devices
 
 
 class ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
@@ -53,8 +55,13 @@ class ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
 
     VERSION = 1
 
-    async def _async_validate(self, data: Mapping[str, Any]) -> tuple[dict[str, Any] | None, dict[str, str]]:
-        """Return account info when the credentials work, otherwise form errors."""
+    def __init__(self) -> None:
+        """Initialize the flow."""
+        self._credentials: dict[str, Any] = {}
+        self._devices: dict[str, str] = {}
+
+    async def _async_validate(self, data: Mapping[str, Any]) -> tuple[dict[str, str] | None, dict[str, str]]:
+        """Return the account's thermostats when the credentials work, otherwise form errors."""
         try:
             return await validate_input(self.hass, data), {}
         except InvalidAuth:
@@ -73,15 +80,17 @@ class ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         errors: dict[str, str] = {}
 
         if user_input is not None:
-            info, errors = await self._async_validate(user_input)
-            if info is not None:
-                await self.async_set_unique_id(user_input[CONF_USERNAME].lower())
-                self._abort_if_unique_id_configured()
+            # Entries made before 1.4.0 are keyed by the account until their next setup ties them to a thermostat
+            if user_input[CONF_USERNAME].lower() in self._async_current_ids():
+                return self.async_abort(reason="already_configured")
 
-                return self.async_create_entry(
-                    title=info["title"],
-                    data=user_input,
-                )
+            devices, errors = await self._async_validate(user_input)
+            if devices is not None:
+                self._credentials = user_input
+                self._devices = devices
+                if len(devices) == 1:
+                    return await self._async_create(next(iter(devices)))
+                return await self.async_step_device()
 
         return self.async_show_form(
             step_id="user",
@@ -92,6 +101,30 @@ class ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                 }
             ),
             errors=errors,
+        )
+
+    async def async_step_device(self, user_input=None) -> config_entries.ConfigFlowResult:
+        """Let the user pick one of the account's thermostats that has no entry yet."""
+        if user_input is not None:
+            return await self._async_create(user_input[CONF_DEVICE_ID])
+
+        configured = self._async_current_ids()
+        offered = {device_id: title for device_id, title in self._devices.items() if device_id not in configured}
+        if not offered:
+            return self.async_abort(reason="already_configured")
+
+        return self.async_show_form(
+            step_id="device",
+            data_schema=vol.Schema({vol.Required(CONF_DEVICE_ID): vol.In(offered)}),
+        )
+
+    async def _async_create(self, device_id: str) -> config_entries.ConfigFlowResult:
+        """Add an entry for one thermostat of the account."""
+        await self.async_set_unique_id(device_id)
+        self._abort_if_unique_id_configured()
+        return self.async_create_entry(
+            title=self._devices[device_id],
+            data={**self._credentials, CONF_DEVICE_ID: device_id},
         )
 
     async def async_step_reauth(self, entry_data: Mapping[str, Any]) -> config_entries.ConfigFlowResult:
