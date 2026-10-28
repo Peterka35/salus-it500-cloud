@@ -1,5 +1,13 @@
 # Changelog
 
+## Unreleased
+
+### Fixed
+- Thermostats come back after an outage long enough for the Salus login to expire. Salus answers an
+  expired security token with HTTP 500 and fault 106 instead of 401, so it was retried as a server
+  error and the integration never logged in again: after a two-hour DNS outage on 28.10.2026 five
+  thermostats stayed unavailable for twelve hours, until the entries were reloaded.
+
 ## 1.4.0
 
 ### Added

@@ -100,3 +100,22 @@ async def test_expired_token_is_renewed() -> None:
     await auth.request("post", "getDeviceList")
 
     assert [kwargs["data"]["secToken"] for kwargs in session.endpoint_calls("getDeviceList")] == ["token-1", "token-2"]
+
+
+async def test_token_rejected_as_server_error_is_renewed() -> None:
+    """Salus API answers an expired token with HTTP 500 and fault 106, not 401; that too means logging in again.
+
+    Seen 28.10.2026: a two-hour DNS outage let the tokens expire and five thermostats stayed unavailable
+    for twelve hours, because the 500 was retried as a server error and nothing logged in again."""
+
+    fault = (
+        '<ns1:requestFault xmlns:ns1="http://arrayent.com/zamapi/"><errorCode>106</errorCode>'
+        "<errorMsg>Invalid security token.</errorMsg></ns1:requestFault>"
+    )
+    session = FakeSession()
+    session.add("getDeviceList", FakeResponse(500, text=fault), FakeResponse(200, text=fixtures.device_list_xml()))
+    auth = await create_auth(session)
+    session.add("sessions", login_response("token-2"))
+
+    assert await auth.request("post", "getDeviceList") == fixtures.device_list_xml()
+    assert [kwargs["data"]["secToken"] for kwargs in session.endpoint_calls("getDeviceList")] == ["token-1", "token-2"]

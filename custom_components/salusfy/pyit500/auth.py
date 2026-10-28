@@ -17,6 +17,12 @@ REQUEST_TIMEOUT = ClientTimeout(total=20)
 RETRY_DELAY_SECONDS = 2
 AUTH_ERROR_STATUSES = frozenset({401, 403})
 TEMPORARY_ERROR_STATUSES = frozenset({500, 502, 503, 504})
+# Salus API answers an expired or unknown security token with HTTP 500 and this fault, not with 401
+INVALID_TOKEN_FAULT = "<errorCode>106</errorCode>"
+
+
+def _token_rejected(status: int, body: str) -> bool:
+    return status in AUTH_ERROR_STATUSES or INVALID_TOKEN_FAULT in body
 
 
 def _strip_special_chars(password: str) -> str:
@@ -100,7 +106,7 @@ class Auth:
         for attempt in range(2):
             auth_values = {"userId": self.user_id, **values, "secToken": self.security_token}
             status, body = await self._async_send(method, url, **kwargs, **{auth_arg: auth_values})
-            if status not in AUTH_ERROR_STATUSES:
+            if not _token_rejected(status, body):
                 return body
             if attempt == 0:
                 _LOGGER.debug("Salus security token was rejected, logging in again")
@@ -120,7 +126,7 @@ class Auth:
             except (TimeoutError, ClientError) as err:
                 problem = type(err).__name__
             else:
-                if resp.status < 400 or resp.status in AUTH_ERROR_STATUSES:
+                if resp.status < 400 or _token_rejected(resp.status, body):
                     return resp.status, body
                 if resp.status not in TEMPORARY_ERROR_STATUSES:
                     raise SalusConnectionError(f"Salus API returned HTTP {resp.status}")
