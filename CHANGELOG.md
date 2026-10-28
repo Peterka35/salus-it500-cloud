@@ -1,5 +1,14 @@
 # Changelog
 
+## 1.5.1
+
+### Fixed
+- A program that changes the thermostat is no longer reported as failed while it lands. Salus
+  answers such a command only after the thermostat took it, and on 28.10.2026 both rewrites
+  (3/12, 1/21) outlasted the 20 s request limit and were sent twice, yet both programs were in
+  place and 3/12 had switched to the new setpoint. The program command now waits up to 60 s, is
+  never sent a second time, and a command left unanswered is settled by reading the program back.
+
 ## 1.5.0
 
 ### Changed

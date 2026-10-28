@@ -5,6 +5,7 @@ import pytest
 from custom_components.salusfy.program import (
     CONFIRM_ATTEMPTS,
     SETTLE_SECONDS,
+    WRITE_TIMEOUT,
     ProgramError,
     SalusProgram,
     Slot,
@@ -199,3 +200,28 @@ async def test_nothing_is_sent_for_a_program_that_cannot_be_encoded() -> None:
         await program.async_write(PLAN[:2])
 
     assert session.endpoint_calls("setMultiDeviceAttributes2") == []
+
+
+async def test_a_command_left_unanswered_that_landed_is_a_success() -> None:
+    """On 2026-10-28 both rewrites outlasted the request timeout and still landed; the read-back decides."""
+
+    session = FakeSession()
+    program, _ = await _program(session)
+    session.add("setMultiDeviceAttributes2", TimeoutError())
+
+    written = await program.async_write(PLAN)
+
+    assert all(slots == PLAN for slots in written.days.values())
+    (call,) = session.endpoint_calls("setMultiDeviceAttributes2")
+    assert call["timeout"] == WRITE_TIMEOUT
+
+
+async def test_a_command_left_unanswered_that_did_not_land_is_an_error() -> None:
+    session = FakeSession()
+    program, _ = await _program(session, attributes_response(**_days("30B03:B03DB03NB03XB03bB0")))
+    session.add("setMultiDeviceAttributes2", TimeoutError())
+
+    with pytest.raises(ProgramError, match="did not change"):
+        await program.async_write(PLAN)
+
+    assert len(session.endpoint_calls("setMultiDeviceAttributes2")) == 1

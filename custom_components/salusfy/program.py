@@ -14,13 +14,18 @@ whole week" means whatever the thermostat's schedule type, and every day is read
 from __future__ import annotations
 
 import asyncio
+import logging
 from collections.abc import Awaitable, Callable, Sequence
 from dataclasses import dataclass
 
+from aiohttp import ClientTimeout
+
 from .pyit500.auth import Auth
 from .pyit500.device import Device
-from .pyit500.exceptions import SalusError
+from .pyit500.exceptions import SalusConnectionError, SalusError
 from .pyit500.parsing import parse_response
+
+_LOGGER = logging.getLogger(__name__)
 
 DAYS = ("mon", "tus", "wed", "thu", "fri", "sat", "sun")
 DAY_ATTRIBUTES = tuple(f"A0{index}" for index in range(len(DAYS)))
@@ -33,6 +38,10 @@ SCHEDULE_TYPES = {"0": SCHEDULE_ALL, "1": SCHEDULE_WEEKDAY_WEEKEND, "2": SCHEDUL
 
 SLOTS_PER_DAY = 6
 CHARACTER_OFFSET = 48
+# A command that changes the program is answered only after the thermostat took it: on 2026-10-28
+# both rewrites outlasted the usual 20 s and still landed. Waiting longer, and then reading back
+# rather than sending again, is what tells a slow success from a failure.
+WRITE_TIMEOUT = ClientTimeout(total=60)
 # The cloud showed a write within 10 s; reading back until it matches costs nothing when it is quick
 SETTLE_SECONDS = 6
 CONFIRM_ATTEMPTS = 10
@@ -134,12 +143,17 @@ class SalusProgram:
         for index, attribute in enumerate(DAY_ATTRIBUTES, start=1):
             params[f"name{index}"] = attribute
             params[f"value{index}"] = encoded
-        response = parse_response(
-            await self._auth.request("get", "setMultiDeviceAttributes2", params=params),
-            "ns1:setMultiDeviceAttributes2Response",
-        )
-        if str((response or {}).get("retCode")) != "0":
-            raise ProgramError(f"Salus API rejected the program (retCode {(response or {}).get('retCode')})")
+        try:
+            text = await self._auth.request(
+                "get", "setMultiDeviceAttributes2", params=params, client_timeout=WRITE_TIMEOUT, retry=False
+            )
+        except SalusConnectionError as err:
+            # No answer is not a refusal: the program is read back below and that decides
+            _LOGGER.debug("Salus API did not answer the program command (%s), reading it back", err)
+        else:
+            response = parse_response(text, "ns1:setMultiDeviceAttributes2Response")
+            if str((response or {}).get("retCode")) != "0":
+                raise ProgramError(f"Salus API rejected the program (retCode {(response or {}).get('retCode')})")
 
         expected = tuple(slots)
         differing: list[str] = []

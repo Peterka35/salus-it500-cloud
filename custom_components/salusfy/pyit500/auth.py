@@ -95,17 +95,28 @@ class Auth:
         except ValueError as err:
             raise SalusConnectionError("Unexpected Salus login response") from err
 
-    async def request(self, method: str, path: str, **kwargs: Any) -> str:
+    async def request(
+        self,
+        method: str,
+        path: str,
+        *,
+        client_timeout: ClientTimeout = REQUEST_TIMEOUT,
+        retry: bool = True,
+        **kwargs: Any,
+    ) -> str:
         """Make an authenticated API request and return the response body.
 
-        A rejected security token is renewed and the request is sent once more."""
+        A rejected security token is renewed and the request is sent once more. Without `retry`, a
+        request that failed or did not answer is not sent a second time."""
         url = f"{self.host}/{self.api_path}/{path}"
         auth_arg = "data" if method == "post" else "params"
         values = dict(kwargs.pop(auth_arg, None) or {})
 
         for attempt in range(2):
             auth_values = {"userId": self.user_id, **values, "secToken": self.security_token}
-            status, body = await self._async_send(method, url, **kwargs, **{auth_arg: auth_values})
+            status, body = await self._async_send(
+                method, url, client_timeout=client_timeout, retry=retry, **kwargs, **{auth_arg: auth_values}
+            )
             if not _token_rejected(status, body):
                 return body
             if attempt == 0:
@@ -114,14 +125,23 @@ class Auth:
 
         raise SalusConnectionError(f"Salus API rejected the renewed security token (HTTP {status})")
 
-    async def _async_send(self, method: str, url: str, **kwargs: Any) -> tuple[int, str]:
+    async def _async_send(
+        self,
+        method: str,
+        url: str,
+        *,
+        client_timeout: ClientTimeout = REQUEST_TIMEOUT,
+        retry: bool = True,
+        **kwargs: Any,
+    ) -> tuple[int, str]:
         """Send a request and return its status and body.
 
         Salus API intermittently fails with server errors or does not answer, so such a request is sent once more.
         Authentication errors are returned to the caller."""
-        for attempt in range(2):
+        attempts = 2 if retry else 1
+        for attempt in range(attempts):
             try:
-                resp = await self.websession.request(method, url, timeout=REQUEST_TIMEOUT, **kwargs)
+                resp = await self.websession.request(method, url, timeout=client_timeout, **kwargs)
                 body = await resp.text()
             except (TimeoutError, ClientError) as err:
                 problem = type(err).__name__
@@ -132,7 +152,7 @@ class Auth:
                     raise SalusConnectionError(f"Salus API returned HTTP {resp.status}")
                 problem = f"HTTP {resp.status}"
 
-            if attempt == 0:
+            if attempt < attempts - 1:
                 _LOGGER.debug("Salus API request failed (%s), retrying", problem)
                 await asyncio.sleep(RETRY_DELAY_SECONDS)
 

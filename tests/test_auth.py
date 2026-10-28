@@ -119,3 +119,16 @@ async def test_token_rejected_as_server_error_is_renewed() -> None:
 
     assert await auth.request("post", "getDeviceList") == fixtures.device_list_xml()
     assert [kwargs["data"]["secToken"] for kwargs in session.endpoint_calls("getDeviceList")] == ["token-1", "token-2"]
+
+
+async def test_a_request_without_retry_is_sent_once() -> None:
+    """A command that may have landed is not sent a second time; its caller checks instead."""
+
+    session = FakeSession()
+    session.add("getDeviceList", TimeoutError())
+    auth = await create_auth(session)
+
+    with pytest.raises(SalusConnectionError):
+        await auth.request("post", "getDeviceList", retry=False)
+
+    assert len(session.endpoint_calls("getDeviceList")) == 1
