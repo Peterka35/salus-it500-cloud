@@ -15,13 +15,6 @@ from .helpers import FakeResponse, FakeSession, attributes_response, login_respo
 CLIENT_SESSION = "custom_components.salusfy.async_get_clientsession"
 
 
-@pytest.fixture(autouse=True)
-def portal_session(monkeypatch: pytest.MonkeyPatch) -> None:
-    """Stand in for the portal's session: a second real one needs the running core for its resolver."""
-
-    monkeypatch.setattr("custom_components.salusfy.async_create_clientsession", lambda _hass: MagicMock())
-
-
 def _hass() -> MagicMock:
     hass = MagicMock()
     hass.config_entries.async_forward_entry_setups = AsyncMock()
@@ -44,6 +37,7 @@ async def test_setup_loads_first_device_of_account() -> None:
         fixtures.DEVICE_ID,
         "Apartmán A",
     )
+    assert entry.runtime_data.program is not None
     hass.config_entries.async_forward_entry_setups.assert_awaited_once_with(entry, PLATFORMS)
 
 

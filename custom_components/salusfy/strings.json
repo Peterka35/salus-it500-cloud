@@ -72,7 +72,7 @@
       "message": "The weekly program of this zone cannot be reached; only the first heating zone is supported."
     },
     "schedule_unavailable": {
-      "message": "The Salus web portal is not set up, so the weekly program cannot be read."
+      "message": "The weekly program of this thermostat is not set up, so it cannot be read."
     },
     "command_failed": {
       "message": "Salus iT500 command failed: {error}"
@@ -89,7 +89,7 @@
       "fields": {
         "slots": {
           "name": "Steps",
-          "description": "One to six steps, each a time and a temperature. An iT500 reached through the web portal needs all six: it keeps steps that are not overwritten."
+          "description": "One to six steps, each a time and a temperature. An iT500 needs all six: it always runs six steps a day."
         }
       }
     }

@@ -21,7 +21,7 @@ from homeassistant.helpers.entity_platform import AddConfigEntryEntitiesCallback
 from .const import DOMAIN
 from .coordinator import SalusConfigEntry, SalusDataCoordinator
 from .entity import SalusEntity
-from .portal import PortalSchedule, SalusPortal, Slot
+from .program import SalusProgram, Slot, WeeklyProgram
 from .pyit500.device import SystemType, TemperatureUnit
 from .pyit500.heatingzone import ConsolidatedMode, HeatingZone
 from .pyit500.zone import OnOffStatus, Prefix
@@ -74,9 +74,9 @@ SLOT_SCHEMA = vol.Schema(
         vol.Required("temperature"): vol.All(vol.Coerce(float), vol.Range(min=5, max=35)),
     }
 )
-# One to six, matching every other slot-count contract in this system. The portal's own limit - it
-# keeps steps it does not overwrite, so only a full day can be verified - is enforced in portal.py,
-# where it belongs, and arrives as a HomeAssistantError rather than a schema rejection.
+# One to six, matching every other slot-count contract in this system. The thermostat's own limit -
+# it always runs six steps a day - is enforced in program.py, where it belongs, and arrives as a
+# HomeAssistantError rather than a schema rejection.
 SET_SCHEDULE_SCHEMA = {vol.Required(ATTR_SLOTS): vol.All(cv.ensure_list, vol.Length(min=1, max=6), [SLOT_SCHEMA])}
 
 
@@ -219,35 +219,35 @@ class SalusThermostat(SalusEntity, ClimateEntity):
 
     # Weekly program -------------------------------------------------------
 
-    def _require_portal(self) -> SalusPortal:
-        """Return the portal client, refusing zones whose program cannot be reached.
+    def _require_program(self) -> SalusProgram:
+        """Return the program client, refusing zones whose program cannot be reached.
 
-        Only the first heating zone is covered: the portal's second-zone and hot-water blocks were
-        never observed, and writing an unverified block shape into an occupied apartment is not a
+        Only the first heating zone is covered: the second zone's attributes (B00..B06) were never
+        seen holding a program, and writing an unverified shape into an occupied apartment is not a
         guess worth making.
         """
 
         if self._zone_prefix != Prefix.CH1:
             raise HomeAssistantError(translation_domain=DOMAIN, translation_key="schedule_zone_unsupported")
-        if self.coordinator.portal is None:
+        if self.coordinator.program is None:
             raise HomeAssistantError(translation_domain=DOMAIN, translation_key="schedule_unavailable")
-        return self.coordinator.portal
+        return self.coordinator.program
 
     async def async_get_schedule(self) -> ServiceResponse:
         """Return the weekly program the thermostat is running."""
 
-        schedule = await self.coordinator.async_run(self._require_portal().async_read)
+        schedule = await self.coordinator.async_run(self._require_program().async_read)
         return _response(schedule)
 
     async def async_set_schedule(self, slots: list[dict[str, Any]]) -> None:
         """Write one daily program to the whole week and confirm the thermostat took it."""
 
-        portal = self._require_portal()
+        client = self._require_program()
         program = [Slot(str(slot["time"])[:5], float(slot["temperature"])) for slot in slots]
-        await self.coordinator.async_run(lambda: portal.async_write(program))
+        await self.coordinator.async_run(lambda: client.async_write(program))
 
 
-def _response(schedule: PortalSchedule) -> ServiceResponse:
+def _response(schedule: WeeklyProgram) -> ServiceResponse:
     return {
         "device_id": schedule.device_id,
         "schedule_type": schedule.schedule_type,

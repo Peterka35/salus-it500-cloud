@@ -15,7 +15,7 @@ from homeassistant.helpers.event import async_call_later
 from homeassistant.helpers.update_coordinator import DataUpdateCoordinator, UpdateFailed
 
 from .const import CONFIRM_REFRESH_DELAYS, DEVICE_OFFLINE_AFTER, DOMAIN, STALE_DATA_TOLERANCE, UPDATE_INTERVAL
-from .portal import SalusPortal
+from .program import SalusProgram
 from .pyit500.device import Device
 from .pyit500.exceptions import InvalidAuth, SalusError
 
@@ -35,14 +35,13 @@ class SalusDataCoordinator(DataUpdateCoordinator[Device]):
         entry: SalusConfigEntry,
         device: Device,
         clock: Callable[[], float] = time.monotonic,
-        portal: SalusPortal | None = None,
+        program: SalusProgram | None = None,
         wall_clock: Callable[[], float] = time.time,
     ) -> None:
         """Initialize the coordinator."""
         super().__init__(hass, _LOGGER, config_entry=entry, name=DOMAIN, update_interval=UPDATE_INTERVAL)
         self.device = device
-        # The weekly program lives on the web portal, not in the mobile API this coordinator polls
-        self.portal = portal
+        self.program = program
         self._clock = clock
         self._wall_clock = wall_clock
         self._reported_offline = False

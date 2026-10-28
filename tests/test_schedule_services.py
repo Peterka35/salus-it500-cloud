@@ -9,33 +9,23 @@ from homeassistant.exceptions import HomeAssistantError
 
 from custom_components.salusfy import climate
 from custom_components.salusfy.climate import SERVICE_GET_SCHEDULE, SERVICE_SET_SCHEDULE, SalusThermostat
-from custom_components.salusfy.portal import PortalError, SalusPortal, Slot
+from custom_components.salusfy.program import ProgramError, SalusProgram, Slot
 from custom_components.salusfy.pyit500.exceptions import InvalidAuth
 from custom_components.salusfy.pyit500.zone import Prefix
 
+from . import fixtures
 from .ha_helpers import create_coordinator
 from .helpers import FakeSession
-from .test_portal import DEVICE_ID, PLAN, _ready, portal
+from .test_program import PLAN
 
 SLOTS = [{"time": time(5, 30), "temperature": 22.0}, {"time": time(9, 0), "temperature": 18.0}]
 
 
-async def _thermostat(zone: Prefix = Prefix.CH1, *, with_portal: bool = True) -> SalusThermostat:
+async def _thermostat(zone: Prefix = Prefix.CH1, *, with_program: bool = True) -> SalusThermostat:
     session = FakeSession()
     coordinator, _ = await create_coordinator(session)
-    if with_portal:
-        portal_session = FakeSession()
-        _ready(portal_session, *_values())
-        coordinator.portal = portal(portal_session)
-    else:
-        coordinator.portal = None
+    coordinator.program = SalusProgram(coordinator.device.auth, fixtures.DEVICE_ID) if with_program else None
     return SalusThermostat(coordinator, zone)
-
-
-def _values() -> tuple:
-    from .test_portal import values
-
-    return (values(), values())
 
 
 async def test_both_services_are_registered_on_the_platform(entity_platform: MagicMock) -> None:
@@ -56,7 +46,7 @@ async def test_reading_returns_the_documented_response_shape() -> None:
 
     response = await thermostat.async_get_schedule()
 
-    assert response["device_id"] == DEVICE_ID
+    assert response["device_id"] == str(fixtures.DEVICE_ID)
     assert response["schedule_type"] == "all"
     assert response["writable"] is True
     assert set(response["days"]) == {"mon", "tus", "wed", "thu", "fri", "sat", "sun"}
@@ -72,8 +62,8 @@ async def test_writing_sends_the_requested_steps() -> None:
     async def _capture(slots):
         written.append(list(slots))
 
-    coordinator.portal = MagicMock(spec=SalusPortal)
-    coordinator.portal.async_write = _capture
+    coordinator.program = MagicMock(spec=SalusProgram)
+    coordinator.program.async_write = _capture
     thermostat = SalusThermostat(coordinator, Prefix.CH1)
 
     await thermostat.async_set_schedule(SLOTS)
@@ -86,10 +76,10 @@ async def test_a_write_the_thermostat_did_not_take_is_an_error() -> None:
     coordinator, _ = await create_coordinator(FakeSession())
 
     async def _refuse(_slots):
-        raise PortalError("Salus portal accepted the program but mon did not change")
+        raise ProgramError("Salus accepted the program but mon did not change")
 
-    coordinator.portal = MagicMock(spec=SalusPortal)
-    coordinator.portal.async_write = _refuse
+    coordinator.program = MagicMock(spec=SalusProgram)
+    coordinator.program.async_write = _refuse
     thermostat = SalusThermostat(coordinator, Prefix.CH1)
 
     with pytest.raises(HomeAssistantError) as error:
@@ -104,8 +94,8 @@ async def test_rejected_credentials_start_a_reauth() -> None:
     async def _reject():
         raise InvalidAuth("rejected")
 
-    coordinator.portal = MagicMock(spec=SalusPortal)
-    coordinator.portal.async_read = _reject
+    coordinator.program = MagicMock(spec=SalusProgram)
+    coordinator.program.async_read = _reject
     thermostat = SalusThermostat(coordinator, Prefix.CH1)
 
     with pytest.raises(HomeAssistantError) as error:
@@ -116,7 +106,7 @@ async def test_rejected_credentials_start_a_reauth() -> None:
 
 
 async def test_the_second_heating_zone_is_refused() -> None:
-    """The portal's second-zone blocks were never observed, so they are not written blind."""
+    """The second zone's day attributes were never seen holding a program, so they are not written blind."""
 
     thermostat = await _thermostat(Prefix.CH2)
 
@@ -126,8 +116,8 @@ async def test_the_second_heating_zone_is_refused() -> None:
         assert error.value.translation_key == "schedule_zone_unsupported"
 
 
-async def test_a_missing_portal_is_reported_rather_than_crashing() -> None:
-    thermostat = await _thermostat(with_portal=False)
+async def test_a_missing_program_client_is_reported_rather_than_crashing() -> None:
+    thermostat = await _thermostat(with_program=False)
 
     with pytest.raises(HomeAssistantError) as error:
         await thermostat.async_get_schedule()

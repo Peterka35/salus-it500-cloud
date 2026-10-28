@@ -61,6 +61,9 @@ Each thermostat is a device named after its description in the Salus app.
 
 - Climate attributes: `frost_active`, `schedule_type`
 - Water heater attributes: `schedule_type`, `running_mode`, `boost_remaining_hours` (in boost mode)
+- `salusfy.get_schedule` returns the weekly program of the first heating zone (six steps a day);
+  `salusfy.set_schedule` writes one daily program of six steps to the whole week and confirms every
+  day took it.
 - `climate.set_hvac_mode` with `heat` switches the thermostat to Auto (schedule). `climate.turn_on` does the same for a turned off thermostat; a thermostat already heating keeps its mode.
 
 ## Automation examples

@@ -1,5 +1,7 @@
 """Salus iT500 (Arrayent) API payloads with made-up identifiers."""
 
+from xml.sax.saxutils import escape
+
 USERNAME = "owner@example.com"
 PASSWORD = "secret!pass"
 DEVICE_ID = 201300001
@@ -8,8 +10,13 @@ SECOND_DEVICE_ID = 201300002
 USER_ID = 1500001
 SECURITY_TOKEN = "token-1"
 
+# The program of every day, as a live thermostat reported it: 05:30 22.0, 09:00 20.0, 12:00 21.0,
+# 14:00 22.0, 22:00 20.0, 23:00 19.0. It holds < and >, which the API sends escaped.
+DAY_PROGRAM = "5NF090D0<0E0>0F0F0D0G0C0"
+
 # CH1 + hot water thermostat, heating zone off, hot water always on
 DEVICE_ATTRIBUTES = {
+    **{f"A0{day}": DAY_PROGRAM for day in range(7)},
     "S06": "2",
     "S07": "0",
     "S09": "500",
@@ -46,7 +53,7 @@ def device_attributes_xml(
 
     upd_time = "" if reported_at is None else f"<updTime>{int(reported_at * 1000)}</updTime>"
     items = "".join(
-        f"<attrList><id>{index}</id><name>{name}</name><value>{value}</value>{upd_time}</attrList>"
+        f"<attrList><id>{index}</id><name>{name}</name><value>{escape(value)}</value>{upd_time}</attrList>"
         for index, (name, value) in enumerate(attributes.items())
     )
     return (

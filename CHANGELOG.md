@@ -1,6 +1,22 @@
 # Changelog
 
-## Unreleased
+## 1.5.0
+
+### Changed
+- Weekly programs are read and written through the mobile API the rest of the integration already
+  uses. Salus switched the salus-it500.com web portal off on 22.10.2026, and `get_schedule` /
+  `set_schedule` timed out ever since. The services take and return the same data as before.
+- The program is the day attributes A00 (Monday) to A06 (Sunday): six steps of four characters,
+  each a number stored as `chr(48 + n)` - hour, minute, whole degrees, tenth. `5NF0` is 05:30 at
+  22.0 °C. Decoded from six live thermostats against the programs the portal had shown.
+- A program is written to all seven days in one command and every day is read back until it
+  matches, up to 60 s. The cloud keeps each day apart even on a thermostat set to 5/2 (writing
+  Monday left Tuesday as it was), so writing every day is what makes one weekly program land
+  whatever the schedule type; `writable` is therefore always true.
+- A temperature that is not a multiple of 0.5 °C is refused before anything is sent.
+
+### Removed
+- The web portal client and its second session.
 
 ### Fixed
 - Thermostats come back after an outage long enough for the Salus login to expire. Salus answers an
